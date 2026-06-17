@@ -5438,14 +5438,17 @@ function loadFromCloud(){
   });
 }
 
-// ── OVERRIDE saveState to ALSO save to Firebase ──
-const _origSaveState = saveState;
-function saveState(state){
-  _origSaveState(state);
-  // Sync to Firebase so all users see changes
-  if(state.courseEdits) saveToCloud(state.courseEdits, 'courseEdits');
-  if(state.coupons)     saveToCloud(state.coupons, 'coupons');
-  if(state.newCourses)  saveToCloud(state.newCourses, 'newCourses');
+// ── FIREBASE SYNC: hook into setState para guardar en nube ──
+// Usamos applyStateToWeb como punto de intercepción seguro
+const _origApplyStateToWeb = applyStateToWeb;
+function applyStateToWeb(state){
+  _origApplyStateToWeb(state);
+  // Sync cambios a Firebase sin causar loop
+  if(state && db){
+    if(state.courseEdits) saveToCloud(state.courseEdits, 'courseEdits');
+    if(state.coupons)     saveToCloud(state.coupons, 'coupons');
+    if(state.newCourses)  saveToCloud(state.newCourses, 'newCourses');
+  }
 }
 
 // ── OVERRIDE saveCourseEdit to sync to Firebase ──
