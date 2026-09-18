@@ -2762,6 +2762,23 @@ optgroup {
           <div id="salesReportWrap"></div>
         </div>
       </div>
+      <div class="tab-content" id="atab-comments">
+        <div style="display:flex;justify-content:flex-end;margin-bottom:1rem;">
+          <button onclick="resetSection('comments')"
+            style="background:transparent;border:1px solid rgba(255,68,102,.4);color:#ff4466;
+                   padding:.5rem 1.2rem;font-size:.78rem;letter-spacing:.08em;cursor:pointer;
+                   clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);
+                   font-family:'Exo 2',sans-serif;"
+            onmouseover="this.style.background='rgba(255,68,102,.12)'"
+            onmouseout="this.style.background='transparent'">
+            🔄 Resetear Comentarios
+          </button>
+        </div>
+        <div class="admin-section">
+          <h3>💬 Comentarios y Sugerencias</h3>
+          <div id="adminCommentsList"></div>
+        </div>
+      </div>
     </div>
   </div>
 </section>
@@ -4732,7 +4749,7 @@ function deleteCourse(i){
 
 // ── RESET SECTIONS (actually clears data) ──
 function resetSection(section){
-  const labels={stats:'estadísticas y ventas',sales:'reporte de ventas',promos:'todas las promociones y cupones',emails:'historial de correos masivos'};
+  const labels={stats:'estadísticas y ventas',sales:'reporte de ventas',promos:'todas las promociones y cupones',emails:'historial de correos masivos',comments:'todos los comentarios y sugerencias'};
   if(!confirm('¿Resetear '+labels[section]+'? Esta acción no se puede deshacer.')) return;
 
   if(section==='stats'){
@@ -4766,6 +4783,13 @@ function resetSection(section){
     const el=document.getElementById('emailsSentLog');
     if(el) el.innerHTML='';
     showNotif('✅ Historial de correos reseteado');
+  }
+  else if(section==='comments'){
+    siteComments=[];
+    localStorage.setItem('lc_comments','[]');
+    renderComments();
+    renderAdminComments();
+    showNotif('✅ Todos los comentarios fueron eliminados');
   }
 }
 
