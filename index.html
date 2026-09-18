@@ -3946,9 +3946,15 @@ function openAdminPanel(){
   renderAdminCoursesList();
 }
 
+// NOTA DE SEGURIDAD: esta contraseña vive en el JS del navegador, por lo
+// tanto cualquier visitante puede leerla con "Ver código fuente". Esto NO
+// es autenticación real — solo evita que alguien se tope con el panel de
+// admin por accidente. La protección real de los datos compartidos vive
+// en las reglas de seguridad de Firebase Realtime Database (ver DEPLOY.md).
+// Si cambiás esta contraseña, avisale a la IA/dev para que la sincronice.
 function verifyAdminPass(){
   const pass = document.getElementById('adminPassInput').value;
-  if(pass === 'LC2026ADMIN'){
+  if(pass === 'ssIr8higsQfC9sUSi98h'){
     startAdminSession();
     document.getElementById('adminPassModal').style.display='none';
     document.getElementById('adminPassError').style.display='none';

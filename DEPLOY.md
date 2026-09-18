@@ -1,5 +1,50 @@
 # 🚀 LC-COURSES — Guía de Despliegue Completa
 
+## 🔒 URGENTE — Reglas de Firebase Realtime Database
+
+El sitio (`index.html`) usa una base **Firebase Realtime Database** compartida
+(`lc-courses-default-rtdb.firebaseio.com`) para sincronizar en vivo los
+cambios del panel de admin (cursos, cupones) entre todos los visitantes.
+
+**La contraseña del panel de admin es solo una pantalla en el navegador — no
+protege esa base de datos.** Cualquier visitante puede abrir la consola del
+navegador (F12) y, si las reglas de Firebase permiten escritura pública,
+reescribir directamente los datos del sitio para TODOS los visitantes, sin
+necesidad de la contraseña.
+
+**Hacé esto ahora en la [consola de Firebase](https://console.firebase.google.com/)**
+→ proyecto `lc-courses` → **Realtime Database** → pestaña **Rules**:
+
+1. Si ves reglas de "modo de prueba" como estas (o `.write: true`), **son
+   inseguras** y hay que cambiarlas ya:
+   ```json
+   { "rules": { ".read": true, ".write": true } }
+   ```
+
+2. Reemplazalas por (permite que el sitio LEA los datos para mostrarlos a
+   todos, pero bloquea toda escritura desde el navegador — el panel de admin
+   client-side no podrá guardar en Firebase hasta que se migre al backend
+   con autenticación real):
+   ```json
+   {
+     "rules": {
+       "lc-courses": {
+         ".read": true,
+         ".write": false
+       }
+     }
+   }
+   ```
+
+3. Click **Publish**.
+
+Esto corta la vía de ataque más grave (alguien reescribiendo tu sitio para
+todos los visitantes). El panel de admin va a seguir funcionando en modo
+"solo este navegador" (usa `localStorage`), simplemente no va a sincronizar
+esos cambios a otros dispositivos hasta que el admin esté migrado al backend
+real (con JWT, ya construido en `backend/`, pendiente de conectar).
+
+
 ## Stack
 
 | Capa | Tecnología | Plataforma |

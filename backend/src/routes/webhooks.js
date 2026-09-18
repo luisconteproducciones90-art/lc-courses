@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 const { Payment } = require('mercadopago');
 const { MercadoPagoConfig } = require('mercadopago');
@@ -10,9 +11,43 @@ const mpClient = new MercadoPagoConfig({
   accessToken: process.env.MP_ACCESS_TOKEN,
 });
 
+// Verifica que la notificación realmente venga de Mercado Pago.
+// Sin esto, cualquiera puede simular un pago "approved" con un POST
+// directo y obtener acceso gratis a cursos pagos.
+// https://www.mercadopago.com.ar/developers/es/docs/checkout-api/additional-content/your-integrations/notifications/webhooks#editor_5
+function verifyMpSignature(req) {
+  const secret = process.env.MP_WEBHOOK_SECRET;
+  if (!secret) return false;
+
+  const xSignature = req.headers['x-signature'];
+  const xRequestId = req.headers['x-request-id'];
+  if (!xSignature || !xRequestId) return false;
+
+  const parts = Object.fromEntries(
+    xSignature.split(',').map(p => p.trim().split('=').map(s => s.trim()))
+  );
+  const { ts, v1 } = parts;
+  if (!ts || !v1) return false;
+
+  const dataId = req.query['data.id'] || '';
+  const manifest = `id:${dataId};request-id:${xRequestId};ts:${ts};`;
+  const expected = crypto.createHmac('sha256', secret).update(manifest).digest('hex');
+
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(v1));
+  } catch {
+    return false;
+  }
+}
+
 // POST /api/webhooks/mercadopago
 router.post('/mercadopago', async (req, res) => {
   try {
+    if (!verifyMpSignature(req)) {
+      console.warn('[WEBHOOK/mp] Firma inválida o ausente — notificación rechazada');
+      return res.sendStatus(401);
+    }
+
     // Responder 200 rápido para que MP no reintente
     res.sendStatus(200);
 
