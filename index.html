@@ -3137,9 +3137,34 @@ function loadState(){
   return JSON.parse(JSON.stringify(DEFAULT_STATE));
 }
 
+// Strip oversized inline base64 images from stored edits/new courses so a
+// single save can't balloon localStorage past its quota (~5-10MB).
+const MAX_STORED_IMG_LEN = 50000;
+function stripHeavyImages(state){
+  let stripped = false;
+  const shrink = obj => {
+    ['img','imgDetail'].forEach(k=>{
+      if(obj[k] && obj[k].length > MAX_STORED_IMG_LEN){ delete obj[k]; stripped = true; }
+    });
+  };
+  if(state.courseEdits) Object.values(state.courseEdits).forEach(shrink);
+  if(state.newCourses)  state.newCourses.forEach(shrink);
+  return stripped;
+}
+
 // Save state and immediately apply to web
 function saveState(state){
-  localStorage.setItem(STATE_KEY, JSON.stringify(state));
+  try {
+    localStorage.setItem(STATE_KEY, JSON.stringify(state));
+  } catch(e){
+    if(e && (e.name === 'QuotaExceededError' || e.code === 22) && stripHeavyImages(state)){
+      // Retry once after dropping heavy inline images accumulated from
+      // earlier saves (before this safeguard existed).
+      localStorage.setItem(STATE_KEY, JSON.stringify(state));
+    } else {
+      throw e;
+    }
+  }
   applyStateToWeb(state);
   // Sync a Firebase (solo si está disponible)
   if(typeof db !== 'undefined' && db){
@@ -4115,19 +4140,38 @@ function saveCourseEdit(){
   const cat = currentFilter ? currentFilter.getAttribute('onclick').match(/'([^']+)'/)?.[1] || 'all' : 'all';
   renderCourses(cat);
 
-  // Save via STATE so changes persist and apply instantly
+  // Save via STATE so changes persist and apply instantly.
+  // Images embedded as base64 data URLs can be several hundred KB each —
+  // storing them in localStorage blows past the browser's ~5-10MB quota
+  // once a couple of courses are edited. Skip persisting an image field
+  // when it's a heavy inline data URL; it still applies live via
+  // courses[idx] above, it just won't survive a page reload.
+  const edit = {
+    title:courses[idx].title, price:courses[idx].price,
+    original:courses[idx].original, level:courses[idx].level,
+    desc:courses[idx].desc, temario:courses[idx].temario
+  };
+  let imgSkipped = false;
+  if(courses[idx].img && courses[idx].img.length <= MAX_STORED_IMG_LEN){
+    edit.img = courses[idx].img;
+  } else if(courses[idx].img){ imgSkipped = true; }
+  if(courses[idx].imgDetail && courses[idx].imgDetail.length <= MAX_STORED_IMG_LEN){
+    edit.imgDetail = courses[idx].imgDetail;
+  } else if(courses[idx].imgDetail){ imgSkipped = true; }
+
   try {
     setState(s=>{
       if(!s.courseEdits) s.courseEdits={};
-      s.courseEdits[String(courses[idx].id)] = {
-        title:courses[idx].title, price:courses[idx].price,
-        original:courses[idx].original, level:courses[idx].level,
-        desc:courses[idx].desc, img:courses[idx].img, imgDetail:courses[idx].imgDetail, temario:courses[idx].temario
-      };
+      s.courseEdits[String(courses[idx].id)] = edit;
     });
-    showSaved('editSaveMsg', '«'+courses[idx].title+'» actualizado y publicado en la web');
+    const note = imgSkipped ? ' (la imagen es muy pesada para guardarse en el navegador; usá una URL en vez de una imagen incrustada para que persista)' : '';
+    showSaved('editSaveMsg', '«'+courses[idx].title+'» actualizado y publicado en la web'+note);
   } catch(e) {
-    showSaveError('editSaveMsg', 'Error al guardar el curso. Revisá la consola.');
+    if(e && (e.name === 'QuotaExceededError' || e.code === 22)){
+      showSaveError('editSaveMsg', 'El curso es muy pesado para guardarse en el navegador (imágenes incrustadas muy grandes). Usá una URL de imagen en vez de subir el archivo.');
+    } else {
+      showSaveError('editSaveMsg', 'Error al guardar el curso. Revisá la consola.');
+    }
     console.error('saveCourseEdit setState error:',e);
   }
 }
@@ -4623,13 +4667,20 @@ function createNewCourse(){
   };
 
   courses.unshift(newCourse);
-  setState(s=>{
-    if(!s.newCourses) s.newCourses=[];
-    s.newCourses = s.newCourses.filter(c=>String(c.id)!==String(newCourse.id));
-    s.newCourses.unshift(newCourse);
-  });
   reRenderCourses();
   renderAdminCoursesList();
+
+  try {
+    setState(s=>{
+      if(!s.newCourses) s.newCourses=[];
+      s.newCourses = s.newCourses.filter(c=>String(c.id)!==String(newCourse.id));
+      s.newCourses.unshift(newCourse);
+    });
+  } catch(e) {
+    console.error('createNewCourse setState error:', e);
+    showNotif('Error al guardar el curso nuevo. Revisá la consola.', 'error');
+    return;
+  }
 
   // Clear form
   ['newTitle','newDesc','newImg','newTemario'].forEach(id=>{ document.getElementById(id).value=''; });
