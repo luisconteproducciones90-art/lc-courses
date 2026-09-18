@@ -2442,15 +2442,7 @@ optgroup {
     </aside>
     <div>
       <div class="tab-content active" id="atab-stats">
-        <div class="admin-stats">
-          <div class="admin-stat"><div class="admin-stat-num">$847K</div><div class="admin-stat-label">Ventas totales</div></div>
-          <div class="admin-stat"><div class="admin-stat-num">523</div><div class="admin-stat-label">Alumnos activos</div></div>
-          <div class="admin-stat"><div class="admin-stat-num">31</div><div class="admin-stat-label">Cursos publicados</div></div>
-          <div class="admin-stat"><div class="admin-stat-num">98%</div><div class="admin-stat-label">Satisfacción</div></div>
-        </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem;">
-          <div class="admin-stats" style="flex:1;min-width:0">
-          </div>
+        <div class="admin-stats" id="statsCardsWrap">
         </div>
         <div style="display:flex;justify-content:flex-end;margin-bottom:1.5rem;">
           <button onclick="resetSection('stats')"
@@ -2465,15 +2457,7 @@ optgroup {
         </div>
         <div class="admin-section">
           <h3>Ventas recientes</h3>
-          <table class="admin-table">
-            <thead><tr><th>Alumno</th><th>Curso</th><th>Monto</th><th>Estado</th></tr></thead>
-            <tbody>
-              <tr><td>María González</td><td>ChatGPT Pro</td><td style="color:var(--neon-cyan)">$12,900</td><td><span class="status-badge status-active">Confirmado</span></td></tr>
-              <tr><td>Carlos López</td><td>Trading Básico</td><td style="color:var(--neon-cyan)">$15,900</td><td><span class="status-badge status-active">Confirmado</span></td></tr>
-              <tr><td>Ana Martínez</td><td>Diseño Gráfico</td><td style="color:var(--neon-cyan)">$9,900</td><td><span class="status-badge status-pending">Pendiente</span></td></tr>
-              <tr><td>Luis Fernández</td><td>Facebook Ads</td><td style="color:var(--neon-cyan)">$11,500</td><td><span class="status-badge status-active">Confirmado</span></td></tr>
-            </tbody>
-          </table>
+          <div id="statsTableWrap"></div>
         </div>
       </div>
       <div class="tab-content" id="atab-courses">
