@@ -38,6 +38,46 @@ necesidad de la contraseña.
 
 3. Click **Publish**.
 
+### Actualización — habilitar comentarios compartidos
+
+El formulario de "¿Qué curso querés que subamos?" ahora sincroniza por
+Firebase para que los comentarios de visitantes reales lleguen al panel de
+admin desde cualquier dispositivo (antes solo se guardaban en el navegador
+de cada visitante y el admin nunca los veía). Esto necesita un permiso de
+escritura acotado **solo** a la ruta de comentarios — el resto del sitio
+(cursos, precios, cupones) sigue bloqueado para escritura pública.
+
+Reemplazá las reglas por estas (agrega el bloque `comments` con `.write:
+true` y validación básica, dejando todo lo demás igual que antes):
+
+```json
+{
+  "rules": {
+    "lc-courses": {
+      ".read": true,
+      ".write": false,
+      "comments": {
+        ".write": true,
+        "$commentId": {
+          ".validate": "newData.hasChildren(['name','text','date']) && newData.child('name').isString() && newData.child('name').val().length <= 100 && newData.child('text').isString() && newData.child('text').val().length >= 5 && newData.child('text').val().length <= 1000"
+        }
+      }
+    }
+  }
+}
+```
+
+**Trade-off a tener en cuenta:** como el sitio no tiene un login real (todo
+corre desde el mismo navegador anónimo, sin Firebase Authentication), esta
+regla no puede distinguir "un visitante dejando un comentario" de "el admin
+respondiendo" — cualquiera con conocimientos de consola del navegador podría
+en teoría escribir comentarios falsos o editar/borrar los existentes usando
+la API de Firebase directamente. Es un riesgo mucho menor que el anterior
+(no toca cursos, precios ni cupones), pero no es cero. La validación limita
+qué se puede escribir (campos obligatorios, longitud), no quién escribe.
+La solución completa es mover comentarios al backend con autenticación real
+cuando se migre el panel de admin.
+
 Esto corta la vía de ataque más grave (alguien reescribiendo tu sitio para
 todos los visitantes). El panel de admin va a seguir funcionando en modo
 "solo este navegador" (usa `localStorage`), simplemente no va a sincronizar

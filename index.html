@@ -4787,6 +4787,10 @@ function resetSection(section){
   else if(section==='comments'){
     siteComments=[];
     localStorage.setItem('lc_comments','[]');
+    if(typeof db !== 'undefined' && db){
+      db.ref('lc-courses/comments').remove()
+        .catch(e=> console.warn('Firebase comments reset error:', e));
+    }
     renderComments();
     renderAdminComments();
     showNotif('✅ Todos los comentarios fueron eliminados');
@@ -5404,8 +5408,19 @@ function submitComment(){
   if(text.length < 5){ msg.style.color='#ff4466'; msg.textContent='Escribí un poco más'; return; }
 
   const now = new Date().toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  siteComments.push({ name, text, date: now, reply: '' });
+  const comment = { name, text, date: now, reply: '' };
+
+  // Optimistic local add so the visitor sees it instantly; if Firebase is
+  // available, push it there too so it reaches the admin from ANY device
+  // (previously comments only ever saved to the visitor's own browser and
+  // never reached the site owner at all).
+  const localKey = 'local-'+Date.now()+'-'+Math.random().toString(36).slice(2);
+  siteComments.push({ _key: localKey, ...comment });
   saveComments();
+  if(typeof db !== 'undefined' && db){
+    db.ref('lc-courses/comments').push(comment)
+      .catch(e=> console.warn('Firebase comment sync error:', e));
+  }
 
   // Clear
   document.getElementById('commentName').value='';
@@ -5477,10 +5492,14 @@ function saveAdminReply(i){
   const inp = document.getElementById('reply-'+i);
   if(!inp) return;
   const reply = inp.value.trim();
-  try { siteComments = JSON.parse(localStorage.getItem('lc_comments')||'[]'); } catch(e){}
   if(siteComments[i]){
     siteComments[i].reply = reply;
-    localStorage.setItem('lc_comments', JSON.stringify(siteComments));
+    saveComments();
+    const key = siteComments[i]._key;
+    if(typeof db !== 'undefined' && db && key && !String(key).startsWith('local-')){
+      db.ref('lc-courses/comments/'+key+'/reply').set(reply)
+        .catch(e=> console.warn('Firebase reply sync error:', e));
+    }
     renderComments();
     renderAdminComments();
     showNotif('✅ Respuesta publicada en la web');
@@ -5488,9 +5507,13 @@ function saveAdminReply(i){
 }
 
 function deleteComment(i){
-  try { siteComments = JSON.parse(localStorage.getItem('lc_comments')||'[]'); } catch(e){}
+  const key = siteComments[i] && siteComments[i]._key;
   siteComments.splice(i,1);
-  localStorage.setItem('lc_comments', JSON.stringify(siteComments));
+  saveComments();
+  if(typeof db !== 'undefined' && db && key && !String(key).startsWith('local-')){
+    db.ref('lc-courses/comments/'+key).remove()
+      .catch(e=> console.warn('Firebase comment delete error:', e));
+  }
   renderComments();
   renderAdminComments();
   showNotif('Comentario eliminado');
@@ -5544,6 +5567,19 @@ function loadFromCloud(){
       }
     });
     reRenderCourses();
+  });
+
+  // Load comments — shared across every visitor and device, unlike the
+  // localStorage-only version this replaces (which never let real visitor
+  // comments reach the site owner's own browser/admin panel).
+  db.ref('lc-courses/comments').on('value', snap => {
+    const remote = snap.val();
+    siteComments = remote
+      ? Object.entries(remote).map(([key, c]) => ({ _key: key, ...c }))
+      : [];
+    saveComments();
+    renderComments();
+    renderAdminComments();
   });
 }
 
