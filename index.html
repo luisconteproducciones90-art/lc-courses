@@ -3183,10 +3183,19 @@ function applyStateToWeb(state){
   if(state.usdRate && state.usdRate >= 100) USD_RATE = state.usdRate;
   // 1. Apply coupons first (safe — adminCoupons already declared)
   if(state.coupons) adminCoupons = state.coupons.map(c=>({...c}));
+  // Drop any undefined/null entries BEFORE reading .id off every course —
+  // splicing an array while forEach iterates it skips elements, so stray
+  // nulls used to survive and crash the next save. Rebuild the array
+  // instead of mutating it in place.
+  if(typeof courses !== 'undefined'){
+    const cleaned = courses.filter(c=>c && c.id != null);
+    courses.length = 0;
+    courses.push(...cleaned);
+  }
   // 2. Apply course edits (prices, images — only update existing HTML courses)
   if(typeof courses !== 'undefined' && state.courseEdits){
     Object.entries(state.courseEdits).forEach(([id, edits])=>{
-      const idx = courses.findIndex(c=>String(c.id)===String(id));
+      const idx = courses.findIndex(c=>c && String(c.id)===String(id));
       if(idx>=0) courses[idx] = {...courses[idx], ...edits};
     });
   }
@@ -3198,10 +3207,6 @@ function applyStateToWeb(state){
         courses.push(nc);
       }
     });
-  }
-  // Remove any undefined/null entries that may have crept in
-  if(typeof courses !== 'undefined'){
-    courses.forEach((c,i)=>{ if(!c || !c.id) courses.splice(i,1); });
   }
   // 4. Re-render courses grid only if courses is ready
   if(typeof courses !== 'undefined' && typeof reRenderCourses === 'function'){
