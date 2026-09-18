@@ -1,11 +1,12 @@
-# render.yaml — Backend en Render.com (alternativa a Railway)
-# Colocar en la raíz del repo del backend
+# render.yaml — Blueprint: crea el backend y su base PostgreSQL juntos,
+# ya conectados entre sí. Deploy con un click desde render.com/deploy.
 services:
   - type: web
     name: lc-courses-api
     runtime: node
     region: oregon
     plan: starter          # free tier disponible
+    rootDir: backend
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /health
