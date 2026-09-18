@@ -1,0 +1,31 @@
+{
+  "version": 2,
+  "name": "lc-courses-frontend",
+  "buildCommand": "next build",
+  "outputDirectory": ".next",
+  "framework": "nextjs",
+  "regions": ["gru1"],
+  "env": {
+    "NEXT_PUBLIC_API_URL": "@lc_api_url",
+    "NEXT_PUBLIC_MP_PUBLIC_KEY": "@lc_mp_public_key",
+    "NEXT_PUBLIC_GOOGLE_CLIENT_ID": "@lc_google_client_id",
+    "NEXT_PUBLIC_SITE_URL": "@lc_site_url"
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/panel",
+      "destination": "/admin",
+      "permanent": false
+    }
+  ]
+}

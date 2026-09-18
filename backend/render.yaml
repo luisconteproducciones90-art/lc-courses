@@ -1,0 +1,34 @@
+# render.yaml — Backend en Render.com (alternativa a Railway)
+# Colocar en la raíz del repo del backend
+services:
+  - type: web
+    name: lc-courses-api
+    runtime: node
+    region: oregon
+    plan: starter          # free tier disponible
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        fromDatabase:
+          name: lc-courses-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      # Las siguientes las configurás manualmente en el dashboard de Render:
+      # MP_ACCESS_TOKEN, MP_PUBLIC_KEY, R2_*, EMAIL_*, GOOGLE_CLIENT_ID, FRONTEND_URL
+    autoDeploy: true
+
+databases:
+  - name: lc-courses-db
+    databaseName: lc_courses
+    user: lc_courses_user
+    plan: starter          # PostgreSQL gratuito
+    region: oregon
