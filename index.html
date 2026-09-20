@@ -2224,7 +2224,7 @@ optgroup {
     <div class="comments-form">
       <input type="text" id="commentName" placeholder="Tu nombre" maxlength="40">
       <textarea id="commentText" placeholder="¿Qué curso querés que subamos? . . ." maxlength="200"></textarea>
-      <button class="btn-comment" onclick="submitComment()">
+      <button class="btn-comment" id="commentSubmitBtn" onclick="submitComment()">
         ✉️ Enviar Sugerencia
       </button>
       <div id="commentMsg" style="font-size:.72rem;text-align:center;min-height:1rem"></div>
@@ -2752,7 +2752,14 @@ optgroup {
         </div>
       </div>
       <div class="tab-content" id="atab-comments">
-        <div style="display:flex;justify-content:flex-end;margin-bottom:1rem;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.75rem;">
+          <button id="btnToggleComments" onclick="toggleCommentsLock()"
+            style="border:1px solid rgba(255,204,0,.4);color:#ffcc00;background:transparent;
+                   padding:.5rem 1.2rem;font-size:.78rem;letter-spacing:.08em;cursor:pointer;
+                   clip-path:polygon(6px 0%,100% 0%,calc(100% - 6px) 100%,0% 100%);
+                   font-family:'Exo 2',sans-serif;">
+            🔒 Bloquear Comentarios
+          </button>
           <button onclick="resetSection('comments')"
             style="background:transparent;border:1px solid rgba(255,68,102,.4);color:#ff4466;
                    padding:.5rem 1.2rem;font-size:.78rem;letter-spacing:.08em;cursor:pointer;
@@ -2762,6 +2769,9 @@ optgroup {
             onmouseout="this.style.background='transparent'">
             🔄 Resetear Comentarios
           </button>
+        </div>
+        <div id="commentsLockNotice" style="display:none;background:rgba(255,204,0,.08);border:1px solid rgba(255,204,0,.3);color:#ffcc00;padding:.75rem 1rem;font-size:.85rem;margin-bottom:1rem;">
+          ⚠️ Los comentarios están bloqueados: nadie puede enviar mensajes nuevos hasta que los desbloquees.
         </div>
         <div class="admin-section">
           <h3>💬 Comentarios y Sugerencias</h3>
@@ -5326,6 +5336,39 @@ function escapeHtml(str){
 let siteComments = [];
 try { siteComments = JSON.parse(localStorage.getItem('lc_comments')||'[]'); } catch(e){}
 
+// Admin kill-switch: lets the site owner stop new comments the moment
+// they spot a spam wave, without touching code. Synced through Firebase
+// (when available) so it takes effect instantly for every visitor, not
+// just the admin's own browser.
+let commentsLocked = localStorage.getItem('lc_comments_locked') === '1';
+
+function updateCommentsLockUI(){
+  const btn = document.getElementById('btnToggleComments');
+  if(btn){
+    btn.textContent = commentsLocked ? '🔓 Desbloquear Comentarios' : '🔒 Bloquear Comentarios';
+    btn.style.borderColor = commentsLocked ? 'rgba(0,255,136,.4)' : 'rgba(255,204,0,.4)';
+    btn.style.color = commentsLocked ? '#00ff88' : '#ffcc00';
+  }
+  const notice = document.getElementById('commentsLockNotice');
+  if(notice) notice.style.display = commentsLocked ? 'block' : 'none';
+
+  const submitBtn = document.getElementById('commentSubmitBtn');
+  if(submitBtn) submitBtn.disabled = commentsLocked;
+  const msg = document.getElementById('commentMsg');
+  if(commentsLocked && msg){ msg.style.color='#ffcc00'; msg.textContent='Los comentarios están cerrados temporalmente.'; }
+}
+
+function toggleCommentsLock(){
+  commentsLocked = !commentsLocked;
+  localStorage.setItem('lc_comments_locked', commentsLocked ? '1' : '0');
+  updateCommentsLockUI();
+  if(typeof db !== 'undefined' && db){
+    db.ref('lc-courses/commentsLocked').set(commentsLocked)
+      .catch(e=> console.warn('Firebase comments-lock sync error:', e));
+  }
+  showNotif(commentsLocked ? '🔒 Comentarios bloqueados para todos los visitantes' : '🔓 Comentarios reabiertos');
+}
+
 function saveComments(){ localStorage.setItem('lc_comments', JSON.stringify(siteComments)); }
 
 function renderComments(){
@@ -5390,6 +5433,7 @@ function submitComment(){
   const text = (document.getElementById('commentText').value||'').trim();
   const msg  = document.getElementById('commentMsg');
 
+  if(commentsLocked){ msg.style.color='#ffcc00'; msg.textContent='Los comentarios están cerrados temporalmente.'; return; }
   if(!name){ msg.style.color='#ff4466'; msg.textContent='Ingresá tu nombre'; return; }
   if(!text){ msg.style.color='#ff4466'; msg.textContent='Escribí tu sugerencia'; return; }
   if(text.length < 5){ msg.style.color='#ff4466'; msg.textContent='Escribí un poco más'; return; }
@@ -5436,6 +5480,7 @@ function adminReplyComment(i, replyText){
 }
 
 renderComments();
+updateCommentsLockUI();
 
 
 // ── ADMIN COMMENTS ──────────────────────────────────────
@@ -5572,6 +5617,16 @@ function loadFromCloud(){
     saveComments();
     renderComments();
     renderAdminComments();
+  });
+
+  // Admin kill-switch for comments — synced instantly to every open tab.
+  db.ref('lc-courses/commentsLocked').on('value', snap => {
+    const val = snap.val();
+    if(val !== null){
+      commentsLocked = !!val;
+      localStorage.setItem('lc_comments_locked', commentsLocked ? '1' : '0');
+      updateCommentsLockUI();
+    }
   });
 }
 
