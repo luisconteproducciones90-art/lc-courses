@@ -5551,6 +5551,11 @@ updateCommentsLockUI();
 
 
 // ── ADMIN COMMENTS ──────────────────────────────────────
+// Admin editing the ORIGINAL comment text (moderation — fixing a typo,
+// or a comment left from the admin's own testing), separate from
+// replying to it. Only one row can be in edit mode at a time.
+let adminEditingKey = null;
+
 function renderAdminComments(){
   const el = document.getElementById('adminCommentsList');
   if(!el) return;
@@ -5564,11 +5569,34 @@ function renderAdminComments(){
 
   el.innerHTML = siteComments.map((c,i)=>`
     <div style="background:rgba(0,212,255,.04);border:1px solid rgba(0,212,255,.1);padding:1rem;margin-bottom:.75rem;">
-      <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.5rem">
-        <strong style="color:var(--neon-cyan)">${escapeHtml(c.name)}</strong>
-        <span style="font-size:.72rem;color:var(--text-muted)">${escapeHtml(c.date)}</span>
-      </div>
-      <p style="font-size:.88rem;margin-bottom:.75rem">${escapeHtml(c.text)}</p>
+      ${c._key && c._key === adminEditingKey ? `
+        <div style="margin-bottom:.75rem">
+          <input type="text" id="adminEditName-${i}" value="${escapeHtml(c.name)}" maxlength="100"
+            style="width:100%;background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.15);
+                   color:var(--text-primary);padding:.4rem .6rem;font-family:'Exo 2',sans-serif;font-size:.85rem;margin-bottom:.5rem">
+          <textarea id="adminEditText-${i}" maxlength="1000" rows="3"
+            style="width:100%;background:rgba(0,212,255,.05);border:1px solid rgba(0,212,255,.15);
+                   color:var(--text-primary);padding:.4rem .6rem;font-family:'Exo 2',sans-serif;font-size:.85rem;resize:vertical">${escapeHtml(c.text)}</textarea>
+          <div style="display:flex;gap:.5rem;margin-top:.5rem">
+            <button onclick="adminSaveEditComment(${i})"
+              style="background:linear-gradient(135deg,var(--neon-blue),var(--neon-violet));border:none;
+                     color:#fff;padding:.4rem 1rem;font-family:'Exo 2',sans-serif;font-size:.78rem;
+                     font-weight:700;cursor:pointer">💾 Guardar</button>
+            <button onclick="adminCancelEditComment()"
+              style="background:transparent;border:1px solid rgba(255,255,255,.2);color:var(--text-muted);
+                     padding:.4rem 1rem;font-family:'Exo 2',sans-serif;font-size:.78rem;cursor:pointer">Cancelar</button>
+          </div>
+        </div>
+      ` : `
+        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.5rem">
+          <strong style="color:var(--neon-cyan)">${escapeHtml(c.name)}</strong>
+          <span style="font-size:.72rem;color:var(--text-muted)">${escapeHtml(c.date)}${c.editedAt ? ' · editado' : ''}</span>
+        </div>
+        <p style="font-size:.88rem;margin-bottom:.5rem">${escapeHtml(c.text)}</p>
+        ${c._key ? `<a href="#" onclick="event.preventDefault();adminStartEditComment('${c._key}')"
+          style="font-size:.75rem;color:var(--neon-blue)">✏️ Editar comentario</a>` : ''}
+        <div style="margin-bottom:.5rem"></div>
+      `}
       ${c.reply ? `<div style="background:rgba(191,0,255,.06);border-left:2px solid var(--neon-violet);padding:.5rem .75rem;font-size:.8rem;color:var(--text-muted);margin-bottom:.75rem">
         <strong style="color:var(--neon-violet)">Tu respuesta:</strong> ${escapeHtml(c.reply)}
       </div>` : ''}
@@ -5590,6 +5618,37 @@ function renderAdminComments(){
         </button>
       </div>
     </div>`).join('');
+}
+
+function adminStartEditComment(key){
+  adminEditingKey = key;
+  renderAdminComments();
+}
+
+function adminCancelEditComment(){
+  adminEditingKey = null;
+  renderAdminComments();
+}
+
+function adminSaveEditComment(i){
+  const c = siteComments[i];
+  if(!c) return;
+  const nameInp = document.getElementById('adminEditName-'+i);
+  const textInp = document.getElementById('adminEditText-'+i);
+  const name = (nameInp.value||'').trim();
+  const text = (textInp.value||'').trim();
+  if(!name || !text){ showNotif('Nombre y comentario no pueden quedar vacíos', 'error'); return; }
+
+  c.name = name; c.text = text; c.editedAt = Date.now();
+  saveComments();
+  if(typeof db !== 'undefined' && db && c._key && !String(c._key).startsWith('local-')){
+    db.ref('lc-courses/comments/'+c._key).update({ name, text, editedAt: c.editedAt })
+      .catch(e=> console.warn('Firebase comment edit error:', e));
+  }
+  adminEditingKey = null;
+  renderComments();
+  renderAdminComments();
+  showNotif('✅ Comentario actualizado');
 }
 
 function saveAdminReply(i){
