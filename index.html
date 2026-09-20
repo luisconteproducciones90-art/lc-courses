@@ -5358,6 +5358,33 @@ function renderComments(){
   list.scrollTop = list.scrollHeight;
 }
 
+// Best-effort anti-spam for the comment form. This is client-side only —
+// the site has no server to see the visitor's real IP, so it can't block
+// "by IP" like a backend would. It stops the common case (someone mashing
+// "Enviar" or a bot resubmitting the same text) from flooding Firebase and
+// running up costs; a determined attacker could still clear localStorage
+// or switch browsers to get around it. Real per-IP blocking needs the
+// backend already built in backend/ (already has rate limiting wired up).
+const COMMENT_COOLDOWN_MS = 60000; // 1 min between comments, same browser
+function checkCommentSpamGuard(text){
+  let last = {};
+  try { last = JSON.parse(localStorage.getItem('lc_last_comment')||'{}'); } catch(e){}
+  const now = Date.now();
+  const normalized = text.trim().toLowerCase();
+
+  if(last.text && normalized === last.text && (now - (last.at||0)) < 10*60000){
+    return 'Ya enviaste ese mismo mensaje. Probá con algo distinto.';
+  }
+  if(last.at && (now - last.at) < COMMENT_COOLDOWN_MS){
+    const wait = Math.ceil((COMMENT_COOLDOWN_MS - (now - last.at))/1000);
+    return `Esperá ${wait}s antes de enviar otro mensaje.`;
+  }
+  return null;
+}
+function recordCommentSpamGuard(text){
+  localStorage.setItem('lc_last_comment', JSON.stringify({ text: text.trim().toLowerCase(), at: Date.now() }));
+}
+
 function submitComment(){
   const name = (document.getElementById('commentName').value||'').trim();
   const text = (document.getElementById('commentText').value||'').trim();
@@ -5366,9 +5393,14 @@ function submitComment(){
   if(!name){ msg.style.color='#ff4466'; msg.textContent='Ingresá tu nombre'; return; }
   if(!text){ msg.style.color='#ff4466'; msg.textContent='Escribí tu sugerencia'; return; }
   if(text.length < 5){ msg.style.color='#ff4466'; msg.textContent='Escribí un poco más'; return; }
+  if(text.length > 1000){ msg.style.color='#ff4466'; msg.textContent='El mensaje es demasiado largo'; return; }
+
+  const spamMsg = checkCommentSpamGuard(text);
+  if(spamMsg){ msg.style.color='#ff4466'; msg.textContent=spamMsg; return; }
 
   const now = new Date().toLocaleString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
   const comment = { name, text, date: now, reply: '' };
+  recordCommentSpamGuard(text);
 
   // Optimistic local add so the visitor sees it instantly; if Firebase is
   // available, push it there too so it reaches the admin from ANY device
