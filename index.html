@@ -2227,6 +2227,10 @@ optgroup {
       <button class="btn-comment" id="commentSubmitBtn" onclick="submitComment()">
         ✉️ Enviar Sugerencia
       </button>
+      <a href="#" id="commentCancelEdit" onclick="event.preventDefault();cancelEditComment()"
+        style="display:none;text-align:center;font-size:.75rem;color:var(--text-muted);margin-top:.3rem">
+        Cancelar edición
+      </a>
       <div id="commentMsg" style="font-size:.72rem;text-align:center;min-height:1rem"></div>
     </div>
   </aside>
@@ -5371,6 +5375,20 @@ function toggleCommentsLock(){
 
 function saveComments(){ localStorage.setItem('lc_comments', JSON.stringify(siteComments)); }
 
+// Comments a visitor submitted from THIS browser — no login exists, so
+// this is how we recognize "this is your own comment" to show an Edit
+// button on it. It's per-browser, like everything else about comments
+// that isn't the admin's own account.
+let myCommentKeys = [];
+try { myCommentKeys = JSON.parse(localStorage.getItem('lc_my_comments')||'[]'); } catch(e){}
+function rememberMyComment(key){
+  if(!myCommentKeys.includes(key)){
+    myCommentKeys.push(key);
+    localStorage.setItem('lc_my_comments', JSON.stringify(myCommentKeys));
+  }
+}
+let editingCommentKey = null;
+
 function renderComments(){
   const list = document.getElementById('commentsList');
   const empty = document.getElementById('commentsEmpty');
@@ -5393,12 +5411,37 @@ function renderComments(){
       <div class="comment-name">👤 ${escapeHtml(c.name)}</div>
       <div class="comment-text">${escapeHtml(c.text)}</div>
       ${c.reply ? `<div class="comment-reply"><strong>LC-COURSES:</strong> ${escapeHtml(c.reply)}</div>` : ''}
-      <div class="comment-date">${escapeHtml(c.date)}</div>
+      <div class="comment-date">${escapeHtml(c.date)}${c.editedAt ? ' · editado' : ''}
+        ${c._key && myCommentKeys.includes(c._key) ? ` · <a href="#" onclick="event.preventDefault();startEditComment('${c._key}')" style="color:var(--neon-blue)">✏️ Editar</a>` : ''}
+      </div>
     </div>
   `).join('');
 
   // Scroll to bottom
   list.scrollTop = list.scrollHeight;
+}
+
+function startEditComment(key){
+  const c = siteComments.find(x=>x._key===key);
+  if(!c) return;
+  editingCommentKey = key;
+  document.getElementById('commentName').value = c.name;
+  document.getElementById('commentText').value = c.text;
+  const btn = document.getElementById('commentSubmitBtn');
+  if(btn) btn.textContent = '💾 Guardar Cambios';
+  const cancelLink = document.getElementById('commentCancelEdit');
+  if(cancelLink) cancelLink.style.display = 'inline';
+  document.getElementById('commentText').scrollIntoView({behavior:'smooth', block:'center'});
+}
+
+function cancelEditComment(){
+  editingCommentKey = null;
+  document.getElementById('commentName').value = '';
+  document.getElementById('commentText').value = '';
+  const btn = document.getElementById('commentSubmitBtn');
+  if(btn) btn.textContent = '✉️ Enviar Sugerencia';
+  const cancelLink = document.getElementById('commentCancelEdit');
+  if(cancelLink) cancelLink.style.display = 'none';
 }
 
 // Best-effort anti-spam for the comment form. This is client-side only —
@@ -5433,11 +5476,33 @@ function submitComment(){
   const text = (document.getElementById('commentText').value||'').trim();
   const msg  = document.getElementById('commentMsg');
 
-  if(commentsLocked){ msg.style.color='#ffcc00'; msg.textContent='Los comentarios están cerrados temporalmente.'; return; }
   if(!name){ msg.style.color='#ff4466'; msg.textContent='Ingresá tu nombre'; return; }
   if(!text){ msg.style.color='#ff4466'; msg.textContent='Escribí tu sugerencia'; return; }
   if(text.length < 5){ msg.style.color='#ff4466'; msg.textContent='Escribí un poco más'; return; }
   if(text.length > 1000){ msg.style.color='#ff4466'; msg.textContent='El mensaje es demasiado largo'; return; }
+
+  // Editing your own existing comment — a typo fix, not new spam, so it's
+  // allowed even while comments are locked and skips the cooldown/duplicate
+  // checks below (those exist to stop NEW spam, not to block a correction).
+  if(editingCommentKey){
+    const c = siteComments.find(x=>x._key===editingCommentKey);
+    if(!c){ cancelEditComment(); return; }
+    c.name = name; c.text = text; c.editedAt = Date.now();
+    saveComments();
+    if(typeof db !== 'undefined' && db && !String(editingCommentKey).startsWith('local-')){
+      db.ref('lc-courses/comments/'+editingCommentKey).update({ name, text, editedAt: c.editedAt })
+        .catch(e=> console.warn('Firebase comment edit error:', e));
+    }
+    cancelEditComment();
+    msg.style.color = '#00ff88';
+    msg.textContent = '✓ Comentario actualizado';
+    setTimeout(()=>{ msg.textContent=''; }, 3000);
+    renderComments();
+    showNotif('✓ Comentario actualizado');
+    return;
+  }
+
+  if(commentsLocked){ msg.style.color='#ffcc00'; msg.textContent='Los comentarios están cerrados temporalmente.'; return; }
 
   const spamMsg = checkCommentSpamGuard(text);
   if(spamMsg){ msg.style.color='#ff4466'; msg.textContent=spamMsg; return; }
@@ -5453,9 +5518,11 @@ function submitComment(){
   const localKey = 'local-'+Date.now()+'-'+Math.random().toString(36).slice(2);
   siteComments.push({ _key: localKey, ...comment });
   saveComments();
+  rememberMyComment(localKey);
   if(typeof db !== 'undefined' && db){
-    db.ref('lc-courses/comments').push(comment)
-      .catch(e=> console.warn('Firebase comment sync error:', e));
+    const pushRef = db.ref('lc-courses/comments').push(comment);
+    if(pushRef.key) rememberMyComment(pushRef.key);
+    pushRef.catch(e=> console.warn('Firebase comment sync error:', e));
   }
 
   // Clear
