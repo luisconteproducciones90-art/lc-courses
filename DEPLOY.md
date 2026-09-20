@@ -61,11 +61,23 @@ true` y validación básica, dejando todo lo demás igual que antes):
         "$commentId": {
           ".validate": "newData.hasChildren(['name','text','date']) && newData.child('name').isString() && newData.child('name').val().length <= 100 && newData.child('text').isString() && newData.child('text').val().length >= 5 && newData.child('text').val().length <= 1000"
         }
+      },
+      "commentsLocked": {
+        ".write": true,
+        ".validate": "newData.isBoolean()"
       }
     }
   }
 }
 ```
+
+`commentsLocked` es el interruptor del botón "🔒 Bloquear Comentarios" del
+panel admin (Admin → Comentarios) — corta los envíos nuevos para todos los
+visitantes al instante, útil si ves una ola de spam. Igual que con
+`comments`, esta ruta también acepta escritura pública porque no hay
+autenticación real que distinga al admin de un visitante; solo un booleano,
+así que el peor caso es que alguien la prenda/apague molestando, no que
+robe o corrompa datos.
 
 **Trade-off a tener en cuenta:** como el sitio no tiene un login real (todo
 corre desde el mismo navegador anónimo, sin Firebase Authentication), esta
