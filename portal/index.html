@@ -160,7 +160,7 @@ footer{border-top:1px solid var(--line);padding:26px 0;text-align:center;color:v
   <!-- PELICULAS -->
   <section class="view" id="v-peliculas">
     <h2 class="sec-title">Películas</h2>
-    <p class="sec-sub">Cine de dominio público y plataformas gratuitas.</p>
+    <p class="sec-sub">Cine de dominio público de Internet Archive (se reproduce acá mismo) y plataformas gratuitas. Los títulos de Internet Archive están marcados allí como dominio público.</p>
     <div class="grid" id="g-movies"></div>
   </section>
 
@@ -249,8 +249,24 @@ const CHANNELS = [
   {id:"dw", type:"ext", url:"https://www.dw.com/es/media-center/live-tv/s-100825", name:"DW Español", cat:["noticias"], ic:"📺", desc:"Noticias internacionales en vivo."},
   {id:"rtve", type:"ext", url:"https://www.rtve.es/play/directos/", name:"RTVE Directos", cat:["noticias","cine"], ic:"🇪🇸", desc:"La 1, 24 Horas y más señales."}
 ];
+/* Películas de dominio público tomadas de Internet Archive (aid = identificador del item) */
+const PD = (id, aid, name, ic, desc) => ({id:"m-" + id, type:"arc", aid, name, ic, tag:"Dominio público", desc});
 const MOVIES = [
-  {id:"m-notld", type:"arc", aid:"night_of_the_living_dead", name:"La noche de los muertos vivientes (1968)", ic:"🧟", tag:"Dominio público", desc:"Clásico del terror. Se reproduce acá mismo."},
+  PD("notld", "night_of_the_living_dead", "La noche de los muertos vivientes (1968)", "🧟", "Clásico del terror de George Romero."),
+  PD("caligari", "DasKabinettdesDoktorCaligariTheCabinetofDrCaligari", "El gabinete del Dr. Caligari (1919)", "🎭", "Joya del cine mudo expresionista alemán."),
+  PD("phantom", "ThePhantomoftheOpera", "El fantasma de la ópera (1925)", "🎻", "Con Lon Chaney. Cine mudo."),
+  PD("lostworld", "lost_world", "El mundo perdido (1925)", "🦖", "Aventura con dinosaurios, cine mudo."),
+  PD("20000", "20000LeaguesUndertheSea", "20.000 leguas de viaje submarino (1916)", "🌊", "Primera adaptación de Julio Verne con rodaje submarino."),
+  PD("pawnshop", "CC_1916_10_02_ThePawnshop", "Chaplin: The Pawnshop (1916)", "🎩", "Comedia muda de Charles Chaplin."),
+  PD("chaplin", "charlie_chaplin_film_fest", "Festival de Charlie Chaplin", "🤡", "Colección de cortos de Chaplin."),
+  PD("girlfriday", "his_girl_friday", "His Girl Friday (1940)", "📰", "Comedia de Howard Hawks con Cary Grant."),
+  PD("haunted", "house_on_haunted_hill_ipod", "House on Haunted Hill (1959)", "🏚️", "Terror clásico con Vincent Price."),
+  PD("scarlet", "ScarletStreet", "Scarlet Street (1945)", "🎨", "Film noir de Fritz Lang."),
+  PD("stranger", "TheStranger_0", "The Stranger (1946)", "🕵️", "Thriller de Orson Welles."),
+  PD("suddenly", "suddenly", "Suddenly (1954)", "🔫", "Suspenso con Frank Sinatra."),
+  PD("gulliver", "gullivers_travels1939", "Los viajes de Gulliver (1939)", "🧚", "Animación clásica de los hermanos Fleischer."),
+  PD("sita", "Sita_Sings_the_Blues", "Sita Sings the Blues (2008)", "🎶", "Animación de Nina Paley liberada con licencia libre."),
+  PD("killers", "Killers_from_space", "Killers From Space (1954)", "👽", "Ciencia ficción de culto."),
   {id:"m-archive", type:"ext", url:"https://archive.org/details/feature_films", name:"Internet Archive · Largometrajes", ic:"🏛️", tag:"Dominio público", desc:"Miles de películas clásicas."},
   {id:"m-pluto", type:"ext", url:"https://pluto.tv/latam/on-demand", name:"Pluto TV · A pedido", ic:"🎞️", tag:"Gratis con anuncios", desc:"Catálogo de cine a pedido."},
   {id:"m-tubi", type:"ext", url:"https://tubitv.com/", name:"Tubi", ic:"🍿", tag:"Gratis con anuncios", desc:"Películas y series sin suscripción."},
