@@ -27,6 +27,7 @@ async function apiAuth(req, res, next) {
   } catch (e) { next(e); }
 }
 const need = (scope) => (req, res, next) => (req.scopes.includes(scope) ? next() : next(E.forbidden(`La clave no tiene el permiso ${scope}`)));
+router.get('/openapi.json', (req, res) => res.json(require('./openapi')())); // pública: es el contrato, sin datos
 router.use(apiAuth, rl.api);
 
 router.get('/products', need('products:read'), wrap(async (req, res) => {

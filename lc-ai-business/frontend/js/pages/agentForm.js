@@ -47,7 +47,7 @@ export default async function page({ params, state }) {
       start: h('input', { type: 'time', value: w.start }), end: h('input', { type: 'time', value: w.end }),
     };
     const dayBoxes = DAYS.map(([n, l]) => ({ n, box: h('input', { type: 'checkbox', checked: w.days.includes(n) }), l }));
-    const toolBoxes = meta.tools.map((tl) => ({ tl, box: h('input', { type: 'checkbox', checked: tl.available && (a.tools || []).includes(tl.name), disabled: !tl.available }) }));
+    const toolBoxes = meta.tools.map((tl) => ({ tl, box: h('input', { type: 'checkbox', checked: tl.available && (a.tools || []).includes(tl.name), disabled: !tl.available }), appr: tl.effect ? h('input', { type: 'checkbox', checked: agent ? (a.approvals || []).includes(tl.name) : tl.defaultApproval }) : null }));
     const err = h('div', { class: 'alert err', hidden: true });
     const save = h('button', { class: 'btn primary', type: 'submit', disabled: !canWrite }, editing ? 'Guardar cambios' : 'Crear agente');
 
@@ -61,7 +61,7 @@ export default async function page({ params, state }) {
           welcome_message: el.welcome.value, offline_message: el.offline.value, autonomy: el.autonomy.value, status: el.status.value,
           data_sources: { knowledge: el.knowledge.checked },
           schedule: el.sched.checked && days.length ? { enabled: true, windows: [{ days, start: el.start.value, end: el.end.value }] } : { enabled: false },
-          tools: toolBoxes.filter((x) => x.box.checked).map((x) => x.tl.name),
+          tools: toolBoxes.filter((x) => x.box.checked).map((x) => x.tl.name), approvals: toolBoxes.filter((x) => x.box.checked && x.appr?.checked).map((x) => x.tl.name),
         };
         try {
           const r = editing ? await put('/api/agents/' + agent.id, body) : await post('/api/agents', body);
@@ -84,8 +84,8 @@ export default async function page({ params, state }) {
       h('div', { style: { display: 'flex', gap: '8px', flexWrap: 'wrap' } }, dayBoxes.map((d) => h('label', { class: 'check', style: { margin: 0 } }, d.box, d.l)))),
     h('div', { class: 'card', style: { marginTop: '16px' } }, h('h3', null, 'Conocimiento y acciones permitidas'),
       h('label', { class: 'check' }, el.knowledge, 'Puede consultar la base de conocimiento de la empresa'),
-      toolBoxes.map(({ tl, box }) => h('label', { class: 'check' + (tl.available ? '' : ' off') }, box, tl.label, tl.available ? null : h('span', { class: 'badge violet right' }, `Fase ${tl.phase}`))),
-      h('p', { class: 'small dim' }, 'Las acciones con efecto (crear pedidos, leads) requerirán aprobación humana cuando se habiliten.')),
+      toolBoxes.map(({ tl, box, appr }) => h('div', { class: 'check', style: { justifyContent: 'space-between', flexWrap: 'wrap' } }, h('label', { style: { display: 'flex', gap: '10px', alignItems: 'center', flex: 1, cursor: 'pointer' } }, box, tl.label), appr ? h('label', { class: 'small mute', style: { display: 'flex', gap: '6px', alignItems: 'center', cursor: 'pointer' } }, appr, 'requiere aprobación') : null)),
+      h('p', { class: 'small dim' }, 'Las acciones con efecto (leads, tickets, presupuestos, pedidos) pueden requerir la aprobación de una persona antes de ejecutarse. Los precios y el stock siempre salen de tu catálogo.')),
     err, h('div', { style: { margin: '18px 0', display: 'flex', gap: '10px' } }, save, h('a', { class: 'btn', href: '/agents' }, 'Volver')));
 
     let side = null;

@@ -60,6 +60,9 @@ test('widget: config pública, chat, historial, orígenes permitidos y aislamien
   assert.equal((await E.put('/api/integrations/widget', { allowed_origins: ['no-es-origen'] })).status, 400);
   await E.put('/api/integrations/widget', { allowed_origins: [] });
   const js = await new Client(base).get('/lc-ai-widget.js'); assert.equal(js.status, 200); assert.match(js.headers.get('content-type'), /javascript/);
+  assert.equal(js.headers.get('cross-origin-resource-policy'), 'cross-origin'); // cargable desde sitios de terceros
+  const pre = await fetch(`${base}/api/widget/${ekey}/chat`, { method: 'OPTIONS', headers: { origin: 'https://cliente.example', 'access-control-request-method': 'POST' } });
+  assert.equal(pre.status, 204); assert.equal(pre.headers.get('access-control-allow-origin'), 'https://cliente.example');
 });
 
 const SECRET = 'app-secret-de-meta-123';
@@ -186,4 +189,10 @@ test('webhooks salientes firmados y conector REST (LC-SYSTEM BUSINESS)', async (
   assert.equal(list.find((c) => c.name === 'Roto').status, 'error'); assert.equal(list.find((c) => c.name === 'LC-SYSTEM BUSINESS').status, 'active');
   assert.ok(!JSON.stringify(list).includes('tok-externo'));
   assert.equal((await F.post(`/api/integrations/connectors/${cn.body.connector.id}/sync`)).status, 404);
+});
+
+test('contrato OpenAPI público del ecosistema', async () => {
+  const r = await new Client(base).get('/api/v1/openapi.json');
+  assert.equal(r.status, 200); assert.equal(r.body.openapi, '3.0.3');
+  assert.ok(r.body.paths['/products/sync'] && r.body.paths['/orders'] && r.body['x-webhooks'].events.includes('stock.low'));
 });

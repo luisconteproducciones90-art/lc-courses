@@ -7,7 +7,7 @@ LC-AI BUSINESS es **un solo servicio Node.js** que sirve la API y la interfaz de
 ## Opción A — Render / Railway / similar (lo más simple)
 1. Subí esta carpeta (`lc-ai-business/`) a un repo de GitHub (ya está en `lc-courses/lc-ai-business`).
 2. En Render: **New → Blueprint** y apuntá a `lc-ai-business/render.yaml`. Crea el servicio y la base.
-3. Completá las variables marcadas: `PUBLIC_URL=https://ai.TU-DOMINIO`, `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD` (y la clave de IA si querés un modelo real).
+3. Completá las variables marcadas: `PUBLIC_URL=https://ai.TU-DOMINIO`, `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD` (y la clave de IA si querés un modelo real). `JWT_SECRET` y `ENCRYPTION_KEY` se generan solas: **copiá `ENCRYPTION_KEY` a un lugar seguro**; si se pierde, los tokens de WhatsApp guardados dejan de ser legibles.
 4. Primera vez: en el servicio abrí **Shell** y ejecutá `node src/db/seed.js` (crea planes, empresa demo y SUPER ADMIN). Las migraciones corren solas al iniciar.
 5. **Dominio**: en Render → *Custom Domains* → agregá `ai.TU-DOMINIO`. En tu DNS creá:
    | Tipo | Nombre | Valor |
@@ -36,6 +36,12 @@ cd backend && npm ci --omit=dev
 NODE_ENV=production DATABASE_URL=... JWT_SECRET=... PUBLIC_URL=https://ai.TU-DOMINIO node src/server.js
 ```
 
+## Canales y cobros (después del despliegue)
+- **Widget web**: en *Integraciones* copiá el `<script>` y pegalo en el sitio del cliente. Funciona desde cualquier dominio (se puede restringir a una lista de sitios).
+- **WhatsApp (API oficial de Meta)**: en *Integraciones → WhatsApp* cargá Phone number ID, token y app secret; copiá la **URL del webhook** y el **token de verificación** en la app de Meta (Webhooks → campo `messages`). La URL debe ser pública con HTTPS, es decir, ya con el subdominio funcionando.
+- **Mercado Pago (suscripciones de LC-AI)**: definí `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` y configurá en Mercado Pago la notificación `https://ai.TU-DOMINIO/api/webhooks/mercadopago` (tema *subscription_preapproval*). Mientras los planes no tengan precio (se fija en *SUPER ADMIN → Planes*), el cambio de plan se solicita a LC-SYSTEM y se registra el pago manual.
+- **Ecosistema LC**: ver `docs/API-ECOSISTEMA.md`.
+
 ## Base de datos (importante)
 - El usuario de la BD **no debe ser superusuario ni `BYPASSRLS`**: la separación entre empresas se apoya en Row-Level Security. En producción la app **se niega a iniciar** si detecta lo contrario.
 - Con Postgres administrado (Render, Supabase, Neon) el usuario de la app ya cumple. Con Postgres propio:
@@ -53,4 +59,5 @@ Ver `.env.example`. Las **claves de IA viven solo en el servidor**. Sin clave, `
 - [ ] `node src/db/seed.js` ejecutado → `https://ai.TU-DOMINIO/demo` funciona.
 - [ ] Probar registro, creación de agente, subida de documento y chat.
 - [ ] Backups automáticos de la base activados en el proveedor.
+- [ ] `ENCRYPTION_KEY` definida y resguardada.
 - [ ] Clave de IA real configurada y límite de gasto fijado en el proveedor (la demo pública consume tokens).

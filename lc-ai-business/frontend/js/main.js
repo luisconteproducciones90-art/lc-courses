@@ -19,14 +19,21 @@ const ROUTES = [
   { path: '/analytics', page: lazy('./pages/dashboard.js'), title: 'Analytics' },
   { path: '/settings', page: lazy('./pages/settings.js'), title: 'Configuración' },
   { path: '/admin', page: lazy('./pages/admin.js'), title: 'Administración', perm: 'admin:*' },
-  ...[['customers', 'Clientes (CRM)', 2, 'users'], ['products', 'Productos y stock', 2, 'box'], ['automations', 'Automatizaciones', 2, 'zap'], ['integrations', 'Integraciones', 3, 'plug'], ['billing', 'Planes y facturación', 4, 'card']]
-    .map(([p, title, phase, ic]) => ({ path: '/' + p, title, page: async () => (await import('./pages/soon.js')).default({ title, phase, ic }) })),
+  { path: '/marketplace', page: lazy('./pages/marketplace.js'), title: 'Marketplace' },
+  { path: '/customers', page: lazy('./pages/customers.js'), title: 'Clientes' },
+  { path: '/products', page: lazy('./pages/products.js'), title: 'Productos' },
+  { path: '/orders', page: lazy('./pages/orders.js'), title: 'Pedidos y aprobaciones' },
+  { path: '/tickets', page: lazy('./pages/tickets.js'), title: 'Tickets' },
+  { path: '/automations', page: lazy('./pages/automations.js'), title: 'Automatizaciones' },
+  { path: '/integrations', page: lazy('./pages/integrations.js'), title: 'Integraciones' },
+  { path: '/billing', page: lazy('./pages/billing.js'), title: 'Planes y facturación' },
+  { path: '/notifications', page: lazy('./pages/notifications.js'), title: 'Notificaciones' },
 ];
 
 const NAV = [
-  ['Principal', [['/dashboard', 'Dashboard', 'home'], ['/conversations', 'Conversaciones', 'chat', 'conversations:read'], ['/agents', 'Agentes IA', 'bot', 'agents:read'], ['/knowledge', 'Conocimiento', 'book', 'knowledge:read']]],
-  ['Negocio', [['/customers', 'Clientes', 'users', null, 2], ['/products', 'Productos', 'box', null, 2], ['/automations', 'Automatizaciones', 'zap', null, 2], ['/analytics', 'Analytics', 'chart', 'analytics:read'], ['/integrations', 'Integraciones', 'plug', null, 3]]],
-  ['Cuenta', [['/companies', 'Empresa', 'building', 'company:read'], ['/billing', 'Planes', 'card', null, 4], ['/settings', 'Configuración', 'cog'], ['/admin', 'SUPER ADMIN', 'shield', 'admin:*']]],
+  ['Principal', [['/dashboard', 'Dashboard', 'home'], ['/conversations', 'Conversaciones', 'chat', 'conversations:read'], ['/agents', 'Agentes IA', 'bot', 'agents:read'], ['/marketplace', 'Marketplace', 'box', 'agents:read'], ['/knowledge', 'Conocimiento', 'book', 'knowledge:read']]],
+  ['Negocio', [['/customers', 'Clientes', 'users', 'crm:read'], ['/products', 'Productos', 'box', 'catalog:read'], ['/orders', 'Pedidos', 'card', 'crm:read'], ['/tickets', 'Tickets', 'chat', 'crm:read'], ['/automations', 'Automatizaciones', 'zap', 'automations:read'], ['/analytics', 'Analytics', 'chart', 'analytics:read']]],
+  ['Cuenta', [['/notifications', 'Notificaciones', 'zap', 'company:read'], ['/integrations', 'Integraciones', 'plug', 'integrations:read'], ['/companies', 'Empresa', 'building', 'company:read'], ['/billing', 'Planes', 'card', 'billing:read'], ['/settings', 'Configuración', 'cog'], ['/admin', 'SUPER ADMIN', 'shield', 'admin:*']]],
 ];
 
 function match(path) {
@@ -51,7 +58,7 @@ function shell(content, path) {
   const side = h('aside', { class: 'side', id: 'side' },
     h('div', { class: 'brand' }, logo(38), h('div', null, h('b', null, 'LC-AI BUSINESS'), h('small', null, 'by LC-SYSTEM'))),
     h('nav', { class: 'nav' }, NAV.map(([label, items]) => [h('div', { class: 'nav-label' }, label),
-      items.filter(([href, , , perm]) => (state.user.role === 'super_admin' ? ['/admin', '/settings'].includes(href) : !perm || can(perm))).map(([href, text, ic, , soon]) => h('a', { href, class: path === href || (href !== '/dashboard' && path.startsWith(href + '/')) ? 'active' : '' }, icon(ic), text, soon ? h('span', { class: 'soon' }, 'F' + soon) : null))])),
+      items.filter(([href, , , perm]) => (state.user.role === 'super_admin' ? ['/admin', '/settings'].includes(href) : !perm || can(perm))).map(([href, text, ic]) => h('a', { href, class: path === href || (href !== '/dashboard' && path.startsWith(href + '/')) ? 'active' : '' }, icon(ic), text, href === '/notifications' ? h('span', { class: 'soon', id: 'nbadge', hidden: true }) : null))])),
     h('div', { class: 'side-foot' },
       h('div', { class: 'me' }, h('div', { class: 'avatar' }, initials(state.user.name)), h('div', null, h('b', null, state.user.name), h('small', null, state.company?.name || 'LC-SYSTEM'))),
       h('button', { class: 'btn ghost sm', style: { width: '100%' }, onclick: logout }, icon('logout'), 'Cerrar sesión')));
@@ -61,6 +68,13 @@ function shell(content, path) {
   side.addEventListener('click', (e) => { if (e.target.closest('a')) toggle(false); });
   return h('div', { class: 'shell' }, side, scrim,
     h('div', null, h('div', { class: 'topbar' }, h('button', { class: 'burger', 'aria-label': 'Menú', onclick: () => toggle(true) }, '☰'), logo(26), h('b', null, 'LC-AI BUSINESS')), h('main', { class: 'main' }, content)));
+}
+
+async function badge() {
+  try {
+    const { unread } = await get('/api/notifications'); const b = document.getElementById('nbadge');
+    if (b) { b.hidden = !unread; b.textContent = unread; }
+  } catch { /* sin badge */ }
 }
 
 async function logout() {
@@ -95,6 +109,7 @@ async function render() {
     document.title = (m.route.title ? m.route.title + ' · ' : '') + 'LC-AI BUSINESS';
     clear(root).append(m.route.public ? node : shell(node, path));
     window.scrollTo(0, 0);
+    if (!m.route.public && state.user.role !== 'super_admin') badge();
   } catch (e) {
     clear(root).append(h('div', { class: 'boot' }, h('div', { class: 'empty' }, h('h2', null, 'No pudimos cargar esta página'), h('p', null, e.message), h('button', { class: 'btn', onclick: render }, 'Reintentar'))));
   }

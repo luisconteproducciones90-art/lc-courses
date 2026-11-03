@@ -3,7 +3,7 @@ import { get, post, put, patch } from '../api.js';
 import { navigate } from '../main.js';
 
 export default async function page() {
-  const [{ stats }, { companies }, { plans }, ai, { logs }] = await Promise.all([get('/api/admin/stats'), get('/api/admin/companies'), get('/api/admin/plans'), get('/api/admin/ai'), get('/api/admin/audit')]);
+  const [{ stats }, { companies }, { plans }, ai, { logs }, { invoices }, { templates }] = await Promise.all([get('/api/admin/stats'), get('/api/admin/companies'), get('/api/admin/plans'), get('/api/admin/ai'), get('/api/admin/audit'), get('/api/admin/invoices'), get('/api/admin/templates')]);
   let tab = 'companies';
   const body = h('div');
   const stat = (l, v) => h('div', { class: 'card stat' }, h('div', { class: 'lbl' }, l), h('div', { class: 'val' }, fmtNum(v)));
@@ -12,6 +12,15 @@ export default async function page() {
     const f = { name: h('input', { maxlength: 120 }), adminName: h('input', { maxlength: 120 }), adminEmail: h('input', { type: 'email' }), adminPassword: h('input', { type: 'password', autocomplete: 'new-password' }), planCode: h('select', null, plans.map((p) => h('option', { value: p.code }, p.name))) };
     modal({ title: 'Crear empresa', body: h('div', null, field('Nombre de la empresa', f.name), field('Nombre del administrador', f.adminName), field('Email del administrador', f.adminEmail), field('Contraseña inicial', f.adminPassword), field('Plan', f.planCode)),
       actions: [{ label: 'Cancelar' }, { label: 'Crear', cls: 'primary', run: async () => { try { await post('/api/admin/companies', Object.fromEntries(Object.entries(f).map(([k, i]) => [k, i.value]))); toast('Empresa creada'); navigate('/admin'); } catch (x) { toast(x.details ? x.details.map((d) => d.message).join(', ') : x.message, true); return false; } } }] });
+  }
+  function manualPay() {
+    const f = { companyId: h('select', null, companies.filter((c) => !c.is_demo).map((c) => h('option', { value: c.id }, c.name))), planCode: h('select', null, plans.map((p) => h('option', { value: p.code }, p.name))), amount: h('input', { type: 'number', min: 0, step: '0.01' }), months: h('input', { type: 'number', min: 1, value: 1 }), description: h('input', { maxlength: 200, placeholder: 'Transferencia…' }) };
+    modal({ title: 'Registrar pago manual', body: h('div', null, field('Empresa', f.companyId), field('Plan', f.planCode), field('Importe', f.amount), field('Meses cubiertos', f.months), field('Concepto', f.description)),
+      actions: [{ label: 'Cancelar' }, { label: 'Registrar y activar', cls: 'primary', run: async () => { try { await post(`/api/admin/companies/${f.companyId.value}/invoices`, { planCode: f.planCode.value, amount: Number(f.amount.value) || 0, months: Number(f.months.value) || 1, description: f.description.value }); toast('Pago registrado'); navigate('/admin'); } catch (x) { toast(x.message, true); return false; } } }] });
+  }
+  function newTemplate() {
+    const json = h('textarea', { rows: 12, class: 'mono', spellcheck: 'false' }, JSON.stringify({ slug: 'mi-plantilla', name: 'Agente para …', industry: 'Rubro', icon: '🤖', description: 'Qué hace', status: 'draft', config: { agent: { type: 'attention', name: 'Nombre', personality: '', tone: 'amable', objective: '', instructions: '', welcome_message: '', rules: ['Nunca inventar datos.'] }, tools: ['search_knowledge', 'handoff_to_human'], knowledge: [{ title: 'Datos generales', content: 'Horarios: [COMPLETAR]' }] } }, null, 2));
+    modal({ title: 'Nueva plantilla (JSON)', body: field('Definición', json), actions: [{ label: 'Cancelar' }, { label: 'Crear', cls: 'primary', run: async () => { try { await post('/api/admin/templates', JSON.parse(json.value)); toast('Plantilla creada'); navigate('/admin'); } catch (x) { toast(x.details ? x.details.map((d) => `${d.field}: ${d.message}`).join(' · ') : x.message, true); return false; } } }] });
   }
   const ST = { trial: ['Prueba', 'amber'], active: ['Activa', 'green'], suspended: ['Suspendida', 'red'] };
   const views = {
@@ -35,10 +44,14 @@ export default async function page() {
         h('table', null, h('tbody', null, ai.providers.map((p) => h('tr', null, h('td', null, h('b', null, p.name)), h('td', null, h('span', { class: 'badge ' + (p.configured ? 'green' : '') }, p.configured ? 'clave presente' : 'sin clave')), h('td', { class: 'small dim' }, p.defaultModel))))),
         h('button', { class: 'btn primary', style: { marginTop: '14px' }, onclick: async () => { try { await put('/api/admin/ai', { provider: sel.value }); toast('Proveedor actualizado'); navigate('/admin'); } catch (x) { toast(x.message, true); } } }, 'Guardar'));
     },
+    invoices: () => h('div', { class: 'card pad0' }, h('div', { style: { padding: '14px 18px', display: 'flex' } }, h('h3', { style: { margin: 0 } }, 'Facturas y pagos'), h('button', { class: 'btn sm primary right', onclick: manualPay }, '+ Registrar pago manual')),
+      h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['Fecha', 'Empresa', 'Plan', 'Importe', 'Medio', 'Estado'].map((t) => h('th', null, t)))), h('tbody', null, invoices.map((i) => h('tr', null, h('td', { class: 'small' }, fmtDate(i.created_at)), h('td', null, i.company_name), h('td', null, i.plan_name || '—'), h('td', null, `${i.currency} ${Number(i.amount).toLocaleString('es-AR')}`), h('td', null, i.provider), h('td', null, h('span', { class: 'badge ' + (i.status === 'paid' ? 'green' : 'amber') }, i.status)))))))),
+    marketplace: () => h('div', { class: 'card pad0' }, h('div', { style: { padding: '14px 18px', display: 'flex' } }, h('h3', { style: { margin: 0 } }, 'Plantillas del marketplace'), h('button', { class: 'btn sm primary right', onclick: newTemplate }, '+ Nueva plantilla')),
+      h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['Plantilla', 'Rubro', 'Instalaciones', 'Estado'].map((t) => h('th', null, t)))), h('tbody', null, templates.map((t) => h('tr', null, h('td', null, h('b', null, `${t.icon} ${t.name}`), h('div', { class: 'small dim mono' }, t.slug)), h('td', null, t.industry), h('td', null, t.installs), h('td', null, h('button', { class: 'btn sm', onclick: async () => { await put('/api/admin/templates/' + t.id, { status: t.status === 'published' ? 'draft' : 'published' }); navigate('/admin'); } }, t.status === 'published' ? '● Publicada' : '○ Borrador')))))))),
     audit: () => h('div', { class: 'card pad0' }, h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['Fecha', 'Empresa', 'Usuario', 'Acción', 'IP'].map((t) => h('th', null, t)))), h('tbody', null, logs.map((l) => h('tr', null, h('td', { class: 'small' }, fmtDate(l.created_at)), h('td', null, l.company_name || '—'), h('td', null, l.user_name || '—'), h('td', { class: 'mono small' }, l.action), h('td', { class: 'mono small dim' }, l.ip))))))),
   };
   const tabs = h('div', { class: 'tabs', role: 'tablist' });
-  const paint = () => { tabs.replaceChildren(...[['companies', 'Empresas'], ['plans', 'Planes'], ['ai', 'Proveedor de IA'], ['audit', 'Auditoría']].map(([k, l]) => h('button', { class: k === tab ? 'on' : '', role: 'tab', onclick: () => { tab = k; paint(); } }, l))); body.replaceChildren(views[tab]()); };
+  const paint = () => { tabs.replaceChildren(...[['companies', 'Empresas'], ['plans', 'Planes'], ['invoices', 'Facturas'], ['marketplace', 'Marketplace'], ['ai', 'Proveedor de IA'], ['audit', 'Auditoría']].map(([k, l]) => h('button', { class: k === tab ? 'on' : '', role: 'tab', onclick: () => { tab = k; paint(); } }, l))); body.replaceChildren(views[tab]()); };
   paint();
   return h('div', null, h('div', { class: 'page-head' }, h('div', null, h('h1', null, 'Administración LC-SYSTEM'), h('p', null, 'Vista global de la plataforma.'))),
     h('div', { class: 'grid g-stats', style: { marginBottom: '18px' } }, stat('Empresas', stats.companies), stat('Suspendidas', stats.suspended), stat('Usuarios', stats.users), stat('Agentes', stats.agents), stat('Conversaciones', stats.conversations), stat('Tokens de IA', stats.tokens)), tabs, body);

@@ -40,6 +40,7 @@ function createApp() {
   });
 
   const api = express.Router();
+  api.use('/widget', require('./modules/widget')); // público y cross-origin: tiene su propio CORS por empresa (antes del CORS global)
   api.use(cors({ origin: env.corsOrigins.length ? env.corsOrigins : false, credentials: true }));
   api.use(rl.general);
   api.use(csrfProtect);
@@ -55,7 +56,6 @@ function createApp() {
   api.use('/ai', require('./modules/ai'));
   api.use('/admin', require('./modules/admin'));
   api.use('/demo', require('./modules/demo'));
-  api.use('/widget', require('./modules/widget'));
   api.use('/webhooks', require('./modules/webhooksIn'));
   api.use('/v1', require('./modules/apiV1'));
   api.use('/whatsapp', require('./modules/whatsapp'));
@@ -78,7 +78,10 @@ function createApp() {
 
   // Frontend estático (mismo origen: simplifica cookies/CSRF y el despliegue en un subdominio)
   if (fs.existsSync(path.join(env.frontendDir, 'index.html'))) {
-    app.use(express.static(env.frontendDir, { index: false, maxAge: env.isProd ? '1h' : 0 }));
+    app.use(express.static(env.frontendDir, {
+      index: false, maxAge: env.isProd ? '1h' : 0,
+      setHeaders: (res, file) => { if (file.endsWith('lc-ai-widget.js')) { res.set('Cross-Origin-Resource-Policy', 'cross-origin'); res.set('Access-Control-Allow-Origin', '*'); } }, // el widget se carga desde sitios de terceros
+    }));
     app.get('*', (req, res, next) => (req.path.startsWith('/api/') ? next() : res.sendFile(path.join(env.frontendDir, 'index.html'))));
   }
   app.use(errorHandler);

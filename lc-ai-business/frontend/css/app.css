@@ -203,3 +203,18 @@ tbody tr:hover{background:rgba(255,255,255,.02)}
 }
 @media (max-width:520px){h1{font-size:22px}.stat .val{font-size:25px}.g-2,.g-3{grid-template-columns:1fr}.msg{max-width:92%}}
 @media (prefers-reduced-motion:reduce){*{animation:none !important;transition:none !important}}
+
+/* ---------- fases 2-5 ---------- */
+.meter{height:8px;background:var(--panel2);border-radius:99px;overflow:hidden;margin-top:6px}
+.meter>div{height:100%;background:var(--grad)}.meter.hot>div{background:var(--red)}
+.plan-card{display:flex;flex-direction:column;gap:10px}.plan-card.cur{border-color:var(--green);box-shadow:0 0 0 1px var(--green) inset}
+.price{font-size:26px;font-weight:700}
+.tpl{display:flex;flex-direction:column;gap:10px}.tpl .ico{font-size:30px}
+.kv{display:grid;grid-template-columns:140px minmax(0,1fr);gap:6px 12px;font-size:14px}.kv dt{color:var(--mute)}.kv dd{margin:0;overflow-wrap:anywhere}
+pre.code{margin:0;background:#080a13;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:12.5px/1.6 var(--mono);overflow-x:auto;white-space:pre-wrap;word-break:break-all}
+.sect{margin-bottom:22px}.sect>h2{margin-bottom:12px}
+.row-actions{display:flex;gap:6px;flex-wrap:wrap}
+.item-row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 0;border-bottom:1px solid var(--line)}.item-row:last-child{border:0}
+.chan{font:11px var(--mono);color:var(--mute)}
+
+.demo-main{max-width:720px;margin:60px auto;padding:0 20px}.demo-main p{margin-top:8px}

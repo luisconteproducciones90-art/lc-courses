@@ -2,7 +2,7 @@
 
 > Producto de **LC-SYSTEM — Soluciones Que Transforman**.
 > Este documento define stack, estructura, base de datos, API, seguridad y multi-tenancy.
-> Estado actual: **Fase 1 (MVP) implementada**. Fases 2–5 diseñadas, no construidas.
+> Estado actual: **Fases 1 a 5 implementadas** (33 pruebas de integración). Ver limitaciones en 7.1.
 
 ## 1. Análisis y decisiones
 
@@ -49,17 +49,20 @@ Operaciones globales (login, panel SUPER ADMIN) usan `db.system(fn)`, visible y 
 
 ## 4. Base de datos
 
+Migraciones: `001_core` (núcleo), `002_crm_catalog`, `003_channels_api`, `004_billing_marketplace`. Todas las tablas con `company_id` tienen RLS; `plans` y `agent_templates` son globales.
+
 Fase 1 crea (migración `001_core.sql`):
 
 `plans`, `companies`, `users`, `refresh_sessions`, `subscriptions`, `agents`, `agent_tools`, `customers`, `conversations`, `conversation_notes`, `messages`, `documents`, `knowledge_chunks` (con `embedding`), `usage`, `audit_logs`, `settings`.
 
-Reservadas para fases siguientes (siempre con `company_id` + RLS):
+Creadas en las fases siguientes:
 
 | Fase | Tablas |
 |---|---|
-| 2 | `products`, `categories`, `leads`, `tickets`, `automations`, `automation_logs`, `notifications` |
-| 3 | `integrations`, `api_keys`, `whatsapp_templates`, `webhook_events` |
-| 4 | `roles`/`permissions` personalizados, `invoices`, `marketplace_agents` (plantillas globales), `agent_installs` |
+| 2 | `products`, `categories`, `leads`, `tickets`, `orders`, `pending_actions`, `automations`, `automation_logs`, `notifications` |
+| 3 | `integrations` (secretos cifrados AES-256-GCM), `api_keys` (solo hash), `whatsapp_templates`, `webhook_endpoints`, `webhook_events` |
+| 4 | `invoices`, `agent_templates` (globales), `agent_installs` |
+| Pendiente | `roles`/`permissions` personalizados por empresa |
 
 Hoy los roles son una columna con `CHECK` y una matriz de permisos en `lib/permissions.js`; pasan a tablas cuando se necesiten roles personalizados por empresa.
 
@@ -77,7 +80,12 @@ Hoy los roles son una columna con `CHECK` y una matriz de permisos en `lib/permi
 | `/ai` | ✅ chat de prueba de agentes | |
 | `/admin` | ✅ empresas, planes, proveedor IA, auditoría | solo SUPER ADMIN |
 | `/demo` | ✅ chat público con datos ficticios | |
-| `/customers`, `/products`, `/automations`, `/integrations`, `/whatsapp`, `/webhooks` | 🚧 responden `501` con la fase prevista | contrato visible desde el día 1 |
+| `/customers`, `/leads`, `/products`, `/tickets`, `/orders`, `/approvals`, `/automations`, `/notifications` | ✅ | Fase 2 |
+| `/widget/:key/*` | ✅ público | Chat embebible, CORS por empresa |
+| `/whatsapp`, `/webhooks/whatsapp/:key` | ✅ | Config + webhook con firma HMAC |
+| `/integrations` | ✅ | Widget, API keys, webhooks, conectores |
+| `/v1/*` | ✅ API key | Ecosistema LC; contrato en `/api/v1/openapi.json` |
+| `/billing`, `/marketplace`, `/webhooks/mercadopago` | ✅ | Fase 4 |
 
 Convención de errores: `{ "error": { "code": "...", "message": "...", "details"? } }`.
 
@@ -110,9 +118,13 @@ Reglas de plataforma (siempre presentes): no inventar información/precios/stock
 
 - El proveedor `mock` es simulado (no es un modelo de lenguaje). Los adaptadores Anthropic/OpenAI están implementados pero **no se probaron contra las APIs reales** (no hay claves en este entorno); la lógica de herramientas sí está probada con el mock.
 - La búsqueda es full-text (stemming en español), no semántica: no encuentra sinónimos. El esquema ya tiene `embedding` para migrar a `pgvector`.
-- Extracción de PDF con `pdfjs-dist` en el proceso de la API (sin OCR; PDFs escaneados no funcionan). Para producción a escala conviene moverla a un worker aislado. DOCX/XLSX/imágenes/URLs: Fase 2.
+- Extracción de PDF/DOCX/XLSX en el proceso de la API (sin OCR: PDFs escaneados e imágenes no se leen). Para escala conviene un worker aislado. Las URLs se descargan con protección SSRF.
 - Los archivos originales no se guardan, solo su texto fragmentado (almacenamiento de objetos llega con la Fase 4).
-- Rate limiting en memoria por proceso: con varias instancias hay que pasarlo a Redis.
+- Rate limiting en memoria por proceso: con varias instancias hay que pasarlo a Redis. Los webhooks de WhatsApp se procesan en segundo plano en el mismo proceso (sin cola): si el servidor se reinicia a mitad, Meta reintenta.
+- **WhatsApp y Mercado Pago no se probaron contra los servicios reales** (sin credenciales aquí): están probados con transportes simulados, firmas HMAC reales y los formatos documentados por Meta y Mercado Pago. Hay que hacer una prueba de punta a punta con credenciales de sandbox antes de vender.
+- **Ecosistema LC**: no se conocen las APIs reales de LC-SYSTEM BUSINESS, LC-ECOMMERCE, LC-PEDIDOS ni LC-PREVIEWS; se entrega un contrato (API v1, webhooks) y un conector REST con mapeo configurable, no integraciones específicas. Google, Instagram, Facebook y Email quedan catalogados, sin implementar.
+- Los precios de los planes están sin definir a propósito; hasta entonces el cambio de plan es por solicitud + pago manual.
+- Los tokens de IA se registran según lo que informe el proveedor; el costo en dinero no se calcula.
 
 ## 8. Hoja de ruta
 

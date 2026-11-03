@@ -53,7 +53,9 @@
       + '.foot{text-align:center;font-size:11px;color:#5d6585;padding:0 0 8px;background:#0f1220}'
       + '@media (max-width:480px){.panel{inset:0;width:100%;max-width:none;height:100%;border-radius:0;bottom:0}.btn{bottom:16px}}'
       + '@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}';
-    var style = el('style', null, css);
+    // Hoja de estilos construible: funciona aunque el sitio anfitrión tenga una CSP estricta (sin 'unsafe-inline')
+    var sheet = null;
+    try { if (root.adoptedStyleSheets !== undefined && window.CSSStyleSheet && CSSStyleSheet.prototype.replaceSync) { sheet = new CSSStyleSheet(); sheet.replaceSync(css); root.adoptedStyleSheets = [sheet]; } } catch (e) { sheet = null; }
     var btn = el('button', 'btn'); btn.setAttribute('aria-label', 'Abrir chat');
     btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 01-11.6 7.1L3 21l1.9-5.4A8 8 0 1121 12z"/></svg>'; // SVG estático propio (sin datos externos)
     var panel = el('div', 'panel'); panel.setAttribute('role', 'dialog'); panel.setAttribute('aria-label', 'Chat con ' + cfg.agent.name);
@@ -67,7 +69,7 @@
     var send = el('button', null, 'Enviar'); send.type = 'submit';
     var form = el('form'); form.appendChild(input); form.appendChild(send);
     panel.appendChild(head); panel.appendChild(body); panel.appendChild(form); panel.appendChild(el('div', 'foot', 'Con tecnología LC-AI BUSINESS'));
-    root.appendChild(style); root.appendChild(btn); root.appendChild(panel);
+    if (!sheet) root.appendChild(el('style', null, css)); root.appendChild(btn); root.appendChild(panel);
     document.body.appendChild(host);
 
     function add(role, text, id, who) {
