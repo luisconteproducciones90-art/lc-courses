@@ -42,4 +42,14 @@ router.post('/whatsapp/:key', wrap(async (req, res) => {
   whatsapp.handleWebhookAsync(companyId, integ, req.body || {});
 }));
 
+// Mercado Pago (suscripciones de LC-AI BUSINESS). Verifica firma y consulta la API; no confía en el cuerpo.
+router.post('/mercadopago', wrap(async (req, res) => {
+  const billing = require('../services/billing');
+  const dataId = req.query['data.id'] || req.body?.data?.id;
+  if (!dataId || !billing.verifySignature(req.headers, dataId)) throw E.forbidden('Firma inválida');
+  const type = req.body?.type || req.query.type;
+  res.sendStatus(200);
+  if (['subscription_preapproval', 'preapproval'].includes(type)) billing.syncPreapproval(dataId).catch((e) => require('../lib/logger').error('mp webhook', { err: e.message }));
+}));
+
 module.exports = router;

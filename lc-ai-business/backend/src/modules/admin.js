@@ -107,6 +107,55 @@ router.put('/ai', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// ----- Facturas manuales (transferencia) -----
+router.get('/invoices', wrap(async (req, res) => {
+  res.json({ invoices: await db.system((q) => q('SELECT i.*, c.name AS company_name, p.name AS plan_name FROM invoices i JOIN companies c ON c.id = i.company_id LEFT JOIN plans p ON p.id = i.plan_id ORDER BY i.created_at DESC LIMIT 100')) });
+}));
+router.post('/companies/:id/invoices', wrap(async (req, res) => {
+  const cid = parse(id, req.params.id);
+  const b = parse(z.object({ planCode: str(40, 1), amount: z.number().min(0).max(1e9), description: str(200), months: z.number().int().min(1).max(24).default(1), activate: z.boolean().default(true) }), req.body);
+  const inv = await db.system(async (q) => {
+    const [plan] = await q('SELECT * FROM plans WHERE code = $1', [b.planCode]); if (!plan) throw E.badRequest('Plan inexistente');
+    const [c] = await q('SELECT id FROM companies WHERE id = $1', [cid]); if (!c) throw E.notFound('Empresa no encontrada');
+    const end = new Date(); end.setUTCMonth(end.getUTCMonth() + b.months);
+    const [i] = await q("INSERT INTO invoices (company_id, plan_id, amount, currency, status, provider, description, period_start, period_end, paid_at) VALUES ($1,$2,$3,$4,'paid','manual',$5, now(), $6, now()) RETURNING *",
+      [cid, plan.id, b.amount, plan.currency, b.description || `Plan ${plan.name} (pago manual)`, end]);
+    if (b.activate) {
+      await q("UPDATE companies SET plan_id = $2, status = CASE WHEN status = 'suspended' THEN status ELSE 'active' END WHERE id = $1", [cid, plan.id]);
+      await q("UPDATE subscriptions SET status = 'canceled' WHERE company_id = $1 AND status IN ('trialing','active','past_due')", [cid]);
+      await q("INSERT INTO subscriptions (company_id, plan_id, status, current_period_end, provider) VALUES ($1,$2,'active',$3,'manual')", [cid, plan.id, end]);
+    }
+    return i;
+  });
+  await audit(req, 'admin.invoice_create', 'invoice', inv.id, { plan: b.planCode, amount: b.amount }, null);
+  res.status(201).json({ invoice: inv });
+}));
+
+// ----- Marketplace: plantillas de agentes -----
+const tplSchema = z.object({
+  slug: z.string().regex(/^[a-z0-9-]{3,60}$/), name: str(120, 2), industry: str(80), description: str(400), icon: str(8), status: z.enum(['draft', 'published']),
+  config: z.object({
+    agent: z.object({ name: str(80), description: str(300), type: z.enum(['attention', 'sales', 'stock', 'admin', 'appointments', 'whatsapp', 'manager', 'custom']), avatar: str(8), personality: str(600), tone: str(80), objective: str(600), instructions: str(4000), welcome_message: str(500), offline_message: str(500), rules: z.array(str(300)).max(20), autonomy: z.enum(['low', 'medium', 'high']) }).partial().optional(),
+    tools: z.array(str(60)).max(20), approvals: z.array(str(60)).max(20).optional(), knowledge: z.array(z.object({ title: str(160, 2), content: str(20000, 10) })).max(10),
+  }),
+});
+router.get('/templates', wrap(async (req, res) => { res.json({ templates: await db.system((q) => q('SELECT * FROM agent_templates ORDER BY created_at DESC')) }); }));
+router.post('/templates', wrap(async (req, res) => {
+  const b = parse(tplSchema.partial({ industry: true, description: true, icon: true, status: true }), req.body);
+  const [t] = await db.system((q) => q('INSERT INTO agent_templates (slug, name, industry, description, icon, config, status) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *', [b.slug, b.name, b.industry || '', b.description || '', b.icon || '🤖', JSON.stringify(b.config), b.status || 'draft']))
+    .catch((e) => { if (e.code === '23505') throw E.conflict('Ya existe una plantilla con ese identificador'); throw e; });
+  await audit(req, 'admin.template_create', 'agent_template', t.id, {}, null);
+  res.status(201).json({ template: t });
+}));
+router.put('/templates/:id', wrap(async (req, res) => {
+  const tid = parse(id, req.params.id); const b = parse(tplSchema.partial(), req.body);
+  const [t] = await db.system((q) => q('UPDATE agent_templates SET name = COALESCE($2,name), industry = COALESCE($3,industry), description = COALESCE($4,description), icon = COALESCE($5,icon), config = COALESCE($6,config), status = COALESCE($7,status) WHERE id = $1 RETURNING *',
+    [tid, b.name ?? null, b.industry ?? null, b.description ?? null, b.icon ?? null, b.config ? JSON.stringify(b.config) : null, b.status ?? null]));
+  if (!t) throw E.notFound('Plantilla no encontrada');
+  await audit(req, 'admin.template_update', 'agent_template', tid, { status: b.status }, null);
+  res.json({ template: t });
+}));
+
 router.get('/audit', wrap(async (req, res) => {
   const logs = await db.system((q) => q(`SELECT l.id, l.action, l.entity, l.entity_id, l.ip, l.created_at, l.company_id, c.name AS company_name, u.name AS user_name
     FROM audit_logs l LEFT JOIN companies c ON c.id = l.company_id LEFT JOIN users u ON u.id = l.user_id ORDER BY l.created_at DESC LIMIT 100`));

@@ -24,6 +24,7 @@ async function ingest(req, { title, sourceType, filename, mime, size, text, csv,
   if (!chunks.length) throw E.badRequest('El documento no tiene contenido utilizable');
   return db.tenant(req.user.companyId, async (q) => {
     await assertLimit(q, req.user.companyId, 'documents');
+    await require('../services/limits').checkStorage(q, req.user.companyId, size || 0);
     if (agentId) { const [a] = await q('SELECT id FROM agents WHERE id = $1', [agentId]); if (!a) throw E.notFound('Agente no encontrado'); }
     const [d] = await q(
       `INSERT INTO documents (company_id, agent_id, title, source_type, filename, mime, size_bytes, status, chunk_count, created_by)

@@ -6,6 +6,7 @@ const db = require('./pool');
 const { migrate } = require('./migrate');
 const { chunkText, chunkCsv } = require('../ai/chunker');
 const demoData = require('./demoData');
+const templates = require('./templates');
 
 // Sin precios definitivos: price_cents NULL, configurable desde SUPER ADMIN.
 const PLANS = [
@@ -20,6 +21,15 @@ async function seedPlans() {
     for (const p of PLANS) {
       await q(`INSERT INTO plans (code, name, description, sort_order, limits, features) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (code) DO NOTHING`,
         [p.code, p.name, p.description, p.sort, JSON.stringify(p.limits), JSON.stringify(p.features)]);
+    }
+  });
+}
+
+async function seedTemplates() {
+  await db.system(async (q) => {
+    for (const t of templates) {
+      await q('INSERT INTO agent_templates (slug, name, industry, description, icon, config, status) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT (slug) DO NOTHING',
+        [t.slug, t.name, t.industry, t.description, t.icon, JSON.stringify(t.config), t.status]);
     }
   });
 }
@@ -59,6 +69,7 @@ async function seedAll({ superAdminEmail, superAdminPassword } = {}) {
   await migrate();
   await seedPlans();
   await seedDemo();
+  await seedTemplates();
   const email = superAdminEmail || env.superAdmin.email;
   let password = superAdminPassword || env.superAdmin.password;
   if (email) {
@@ -73,5 +84,5 @@ async function seedAll({ superAdminEmail, superAdminPassword } = {}) {
   } else console.log('Tip: definí SUPERADMIN_EMAIL y SUPERADMIN_PASSWORD para crear el SUPER ADMIN.');
 }
 
-module.exports = { seedAll, seedPlans, seedDemo };
+module.exports = { seedAll, seedPlans, seedDemo, seedTemplates };
 if (require.main === module) seedAll().then(() => db.close()).catch((e) => { console.error(e.message); process.exit(1); });

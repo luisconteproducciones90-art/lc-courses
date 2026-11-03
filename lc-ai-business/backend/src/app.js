@@ -60,6 +60,8 @@ function createApp() {
   api.use('/v1', require('./modules/apiV1'));
   api.use('/whatsapp', require('./modules/whatsapp'));
   api.use('/integrations', require('./modules/integrations'));
+  api.use('/billing', require('./modules/billing'));
+  api.use('/marketplace', require('./modules/marketplace'));
   api.use('/products', require('./modules/products'));
   const crm = require('./modules/customers');
   api.use('/customers', crm.customers);

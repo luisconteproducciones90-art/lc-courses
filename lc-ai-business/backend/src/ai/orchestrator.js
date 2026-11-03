@@ -10,6 +10,7 @@ const tools = require('./tools');
 const log = require('../lib/logger');
 const events = require('../services/events');
 const domain = require('../services/domain');
+const limits = require('../services/limits');
 const { E } = require('../lib/httpError');
 
 const MAX_TOOL_ROUNDS = 3;
@@ -31,7 +32,7 @@ async function handleCustomerMessage(p) {
     if (p.requireActive && agent.status !== 'active') throw E.notFound('Agente no disponible');
     const [company] = await q('SELECT * FROM companies WHERE id = $1', [p.companyId]);
 
-    let conv;
+    let conv; let newConversation = false;
     if (p.conversationId) {
       [conv] = await q('SELECT * FROM conversations WHERE id = $1 AND agent_id = $2', [p.conversationId, p.agentId]);
       if (!conv) throw E.notFound('Conversación no encontrada');
@@ -40,6 +41,7 @@ async function handleCustomerMessage(p) {
       [conv] = await q(
         `INSERT INTO conversations (company_id, agent_id, customer_id, channel, contact_name, visitor_hash, external_contact) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
         [p.companyId, p.agentId, p.customerId || null, p.channel, p.contactName || '', p.visitorId ? hashVisitor(p.visitorId) : null, p.externalContact || '']);
+      newConversation = true;
     }
     if (p.maxMessages) {
       const [{ n }] = await q("SELECT count(*)::int n FROM messages WHERE conversation_id = $1 AND role = 'customer'", [conv.id]);
@@ -62,10 +64,19 @@ async function handleCustomerMessage(p) {
       enabledTools = trows.map((r) => r.tool_name);
       approvals = Object.fromEntries(trows.map((r) => [r.tool_name, r.requires_approval]));
     }
-    return { agent, company, conv, history, knowledge, enabledTools, approvals, humanMode };
+    return { agent, company, conv, history, knowledge, enabledTools, approvals, humanMode, newConversation };
   });
 
   const { agent, company, conv } = ctx;
+  const lim = ctx.humanMode ? { ok: true } : await limits.checkMessaging(p.companyId, { newConversation: ctx.newConversation });
+  if (!lim.ok) {
+    if (p.channel === 'test') throw E.limit(`${lim.reason} Actualizá el plan para seguir probando agentes.`);
+    await db.tenant(p.companyId, async (q) => {
+      const [dup] = await q("SELECT 1 FROM notifications WHERE title = 'Límite de plan alcanzado' AND created_at > now() - interval '1 day'");
+      if (!dup) await domain.notify(q, p.companyId, { title: 'Límite de plan alcanzado', body: `${lim.reason} Los clientes reciben un aviso y se derivan a una persona.`, level: 'alert', link: '/billing' });
+    });
+    return saveReply(p.companyId, conv.id, 'En este momento no podemos responderte automáticamente. Dejanos tu consulta y una persona del equipo te va a contestar.', { limit: lim.kind }, 'needs_human', lim.reason, agent.id, null, []);
+  }
   const autoReplies = await events.emit(p.companyId, 'message.received', { text: p.message, conversationId: conv.id, agentId: agent.id, customerId: conv.customer_id || null });
   if (ctx.humanMode) return finish(p.companyId, conv.id, null, 'needs_human', 'human', autoReplies);
 
