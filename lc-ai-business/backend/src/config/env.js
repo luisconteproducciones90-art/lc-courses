@@ -13,6 +13,11 @@ if (!jwtSecret || jwtSecret.length < 32) {
   console.warn('[env] JWT_SECRET ausente: usando secreto efímero de desarrollo');
 }
 
+let encKey = process.env.ENCRYPTION_KEY;
+if (!encKey || encKey.length < 32) {
+  if (isProd) throw new Error('ENCRYPTION_KEY (>= 32 caracteres) es obligatoria en producción: cifra los secretos de integraciones');
+  encKey = jwtSecret; // desarrollo: los secretos guardados dejan de ser legibles al reiniciar
+}
 const publicUrl = (process.env.PUBLIC_URL || 'http://localhost:4000').replace(/\/$/, '');
 
 module.exports = Object.freeze({
@@ -24,11 +29,13 @@ module.exports = Object.freeze({
   databaseUrl: process.env.DATABASE_URL || 'postgres://lc_ai:lc_ai@localhost:5432/lc_ai_business',
   databaseSsl: bool(process.env.DATABASE_SSL),
   jwtSecret,
+  encryptionKey: encKey,
   allowPrivateUrls: bool(process.env.ALLOW_PRIVATE_URLS) && !isProd, // solo desarrollo/tests
   cookieSecure: bool(process.env.COOKIE_SECURE, isProd),
   accessTtlSec: 15 * 60,
   refreshTtlSec: 7 * 24 * 3600,
   superAdmin: { email: process.env.SUPERADMIN_EMAIL || '', password: process.env.SUPERADMIN_PASSWORD || '' },
+  mp: { accessToken: process.env.MP_ACCESS_TOKEN || '', webhookSecret: process.env.MP_WEBHOOK_SECRET || '' },
   ai: {
     provider: process.env.AI_PROVIDER || 'mock',
     anthropic: { key: process.env.ANTHROPIC_API_KEY || '', model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5' },

@@ -7,6 +7,7 @@ const { parse, z, str, id } = require('../lib/validate');
 const { clean } = require('../lib/text');
 const { E } = require('../lib/httpError');
 const { audit } = require('../lib/audit');
+const whatsapp = require('../services/whatsapp');
 
 const router = express.Router();
 router.use(authenticate);
@@ -55,7 +56,10 @@ router.post('/:id/messages', requirePerm('conversations:reply'), wrap(async (req
     await q("UPDATE conversations SET mode = 'human', status = 'waiting_customer', assigned_user_id = $2, last_message_at = now() WHERE id = $1", [cid, req.user.id]);
     return m;
   });
-  res.status(201).json({ message: msg });
+  const [conv] = await db.tenant(req.user.companyId, (q) => q('SELECT id, channel, external_contact FROM conversations WHERE id = $1', [cid]));
+  let delivery = null;
+  if (conv.channel === 'whatsapp') delivery = await whatsapp.sendOperatorReply(req.user.companyId, conv, content);
+  res.status(201).json({ message: msg, delivery });
 }));
 
 const action = (name, fn) => router.post(`/:id/${name}`, requirePerm('conversations:reply'), wrap(async (req, res) => {

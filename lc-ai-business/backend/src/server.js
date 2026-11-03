@@ -11,6 +11,8 @@ const { createApp } = require('./app');
   const automations = require('./services/automations');
   const tick = setInterval(() => automations.runInactiveCustomers().catch((e) => log.error('scheduler', { err: e.message })), 30 * 60 * 1000);
   tick.unref();
+  const sync = setInterval(() => require('./services/connectors').runAutoSyncs().catch((e) => log.error('autosync', { err: e.message })), 30 * 60 * 1000);
+  sync.unref();
   const server = createApp().listen(env.port, () => log.info('LC-AI BUSINESS escuchando', { port: env.port, env: env.isProd ? 'production' : 'development' }));
   const stop = () => server.close(() => db.close().then(() => process.exit(0)));
   process.on('SIGTERM', stop); process.on('SIGINT', stop);

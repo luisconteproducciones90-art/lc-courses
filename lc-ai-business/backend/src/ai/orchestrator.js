@@ -38,8 +38,8 @@ async function handleCustomerMessage(p) {
       if (p.visitorId && conv.visitor_hash !== hashVisitor(p.visitorId)) throw E.notFound('Conversación no encontrada');
     } else {
       [conv] = await q(
-        `INSERT INTO conversations (company_id, agent_id, channel, contact_name, visitor_hash) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
-        [p.companyId, p.agentId, p.channel, p.contactName || '', p.visitorId ? hashVisitor(p.visitorId) : null]);
+        `INSERT INTO conversations (company_id, agent_id, customer_id, channel, contact_name, visitor_hash, external_contact) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+        [p.companyId, p.agentId, p.customerId || null, p.channel, p.contactName || '', p.visitorId ? hashVisitor(p.visitorId) : null, p.externalContact || '']);
     }
     if (p.maxMessages) {
       const [{ n }] = await q("SELECT count(*)::int n FROM messages WHERE conversation_id = $1 AND role = 'customer'", [conv.id]);
@@ -47,7 +47,8 @@ async function handleCustomerMessage(p) {
     }
     const history = await q('SELECT role, content FROM messages WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT 20', [conv.id]);
     history.reverse();
-    await q("INSERT INTO messages (company_id, conversation_id, role, content) VALUES ($1,$2,'customer',$3)", [p.companyId, conv.id, p.message]);
+    await q("INSERT INTO messages (company_id, conversation_id, role, content, external_id) VALUES ($1,$2,'customer',$3,$4)", [p.companyId, conv.id, p.message, p.externalId || null]);
+    if (p.customerId) await q('UPDATE customers SET last_contact_at = now(), last_agent_id = $2 WHERE id = $1', [p.customerId, p.agentId]);
 
     const humanMode = conv.mode === 'human';
     await q("UPDATE conversations SET last_message_at = now(), status = CASE WHEN $2 THEN 'needs_human' ELSE 'ai' END WHERE id = $1", [conv.id, humanMode]);

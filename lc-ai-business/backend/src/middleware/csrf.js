@@ -4,7 +4,7 @@ const { E } = require('../lib/httpError');
 const { randomToken, safeEqual } = require('../lib/tokens');
 
 const SAFE = new Set(['GET', 'HEAD', 'OPTIONS']);
-const PUBLIC_PREFIXES = ['/api/demo', '/api/webhooks']; // sin cookies de sesión: no aplica CSRF
+const PUBLIC_PREFIXES = ['/api/demo', '/api/webhooks', '/api/widget', '/api/v1']; // sin cookies de sesión: no aplica CSRF
 const allowedHosts = new Set([new URL(env.publicUrl).host, ...env.corsOrigins.map((o) => { try { return new URL(o).host; } catch { return o; } })]);
 
 function issueCsrfCookie(res) {

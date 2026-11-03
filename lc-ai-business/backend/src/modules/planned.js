@@ -4,7 +4,7 @@ const express = require('express');
 const { authenticate } = require('../middleware/auth');
 const { E } = require('../lib/httpError');
 
-const PLAN = { integrations: 3, whatsapp: 3, webhooks: 3 };
+const PLAN = {};
 module.exports = Object.entries(PLAN).map(([name, phase]) => {
   const r = express.Router();
   if (name !== 'webhooks') r.use(authenticate);

@@ -205,8 +205,8 @@ test('demo público: agentes ficticios, chat sin login, límites', async () => {
 });
 
 test('API planificada responde 501; analytics del dashboard', async () => {
-  const p = await A.get('/api/whatsapp');
-  assert.equal(p.status, 501); assert.equal(p.body.error.details.phase, 3);
+  const p = await A.get('/api/nada-aun');
+  assert.equal(p.status, 404);
   const an = await A.get('/api/analytics/overview?range=month');
   assert.equal(an.status, 200);
   assert.ok(an.body.totals.conversations >= 1);

@@ -31,7 +31,7 @@ function createApp() {
   // HTTPS obligatorio en producción
   if (env.isProd) app.use((req, res, next) => (req.secure || req.path === '/health' ? next() : res.redirect(301, `https://${req.get('host')}${req.originalUrl}`)));
 
-  app.use(express.json({ limit: '300kb' }));
+  app.use(express.json({ limit: '300kb', verify: (req, res, buf) => { if (req.originalUrl.startsWith('/api/webhooks/')) req.rawBody = buf; } })); // rawBody: verificación de firmas
   app.use(cookieParser());
   if (!env.isTest) app.use((req, res, next) => { const t = Date.now(); res.on('finish', () => { if (req.path !== '/health') log.info('req', { m: req.method, p: req.path, s: res.statusCode, ms: Date.now() - t }); }); next(); });
 
@@ -55,6 +55,11 @@ function createApp() {
   api.use('/ai', require('./modules/ai'));
   api.use('/admin', require('./modules/admin'));
   api.use('/demo', require('./modules/demo'));
+  api.use('/widget', require('./modules/widget'));
+  api.use('/webhooks', require('./modules/webhooksIn'));
+  api.use('/v1', require('./modules/apiV1'));
+  api.use('/whatsapp', require('./modules/whatsapp'));
+  api.use('/integrations', require('./modules/integrations'));
   api.use('/products', require('./modules/products'));
   const crm = require('./modules/customers');
   api.use('/customers', crm.customers);

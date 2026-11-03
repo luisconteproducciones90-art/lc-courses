@@ -4,7 +4,7 @@ const P = {
   company_admin: [
     'company:read', 'company:update', 'users:read', 'users:write', 'agents:read', 'agents:write',
     'conversations:read', 'conversations:reply', 'knowledge:read', 'knowledge:write', 'analytics:read',
-    'crm:read', 'crm:write', 'catalog:read', 'catalog:write', 'automations:read', 'automations:write', 'approvals:decide',
+    'crm:read', 'crm:write', 'catalog:read', 'catalog:write', 'automations:read', 'automations:write', 'approvals:decide', 'integrations:read', 'integrations:write', 'billing:read', 'billing:write',
   ],
   operator: ['company:read', 'agents:read', 'conversations:read', 'conversations:reply', 'knowledge:read', 'analytics:read', 'crm:read', 'crm:write', 'catalog:read', 'automations:read', 'approvals:decide'],
   viewer: ['company:read', 'agents:read', 'conversations:read', 'knowledge:read', 'analytics:read', 'crm:read', 'catalog:read', 'automations:read'],

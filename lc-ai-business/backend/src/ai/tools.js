@@ -128,7 +128,7 @@ const CATALOG = {
     async effect(q, ctx, i) {
       const [cv] = ctx.conversationId ? await q('SELECT customer_id FROM conversations WHERE id = $1', [ctx.conversationId]) : [];
       const o = await domain.createOrder(q, ctx.companyId, { kind: 'order', items: i.items, notes: i.notes, customerId: cv?.customer_id, conversationId: ctx.conversationId, agentId: ctx.agentId });
-      return { result: { ok: true, order_id: o.id, total: Number(o.total), items: o.items }, events: [] };
+      return { result: { ok: true, order_id: o.id, total: Number(o.total), items: o.items }, events: [['order.created', { orderId: o.id, conversationId: ctx.conversationId }]] };
     },
   },
 };
