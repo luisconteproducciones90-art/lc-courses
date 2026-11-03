@@ -12,7 +12,7 @@ const { parse, z, str } = require('../lib/validate');
 const { E } = require('../lib/httpError');
 const { sha256, randomToken, signAccess } = require('../lib/tokens');
 const { audit } = require('../lib/audit');
-const { can } = require('../lib/permissions');
+const { permsFor } = require('../lib/permissions');
 
 const router = express.Router();
 const MAX_FAILS = 5;
@@ -45,8 +45,7 @@ async function profile(user) {
       `SELECT c.id, c.name, c.status, c.is_demo, c.public_key, p.code AS plan_code, p.name AS plan_name, p.limits AS plan_limits
          FROM companies c LEFT JOIN plans p ON p.id = c.plan_id WHERE c.id = $1`, [user.company_id])))[0]
     : null;
-  const perms = ['company:read', 'company:update', 'users:read', 'users:write', 'agents:read', 'agents:write', 'conversations:read',
-    'conversations:reply', 'knowledge:read', 'knowledge:write', 'analytics:read', 'admin:*'].filter((p) => can(user.role, p));
+  const perms = permsFor(user.role);
   return { user: { id: user.id, name: user.name, email: user.email, role: user.role }, company, permissions: perms };
 }
 

@@ -8,20 +8,14 @@ const retriever = require('./retriever');
 const promptBuilder = require('./promptBuilder');
 const tools = require('./tools');
 const log = require('../lib/logger');
+const events = require('../services/events');
+const domain = require('../services/domain');
 const { E } = require('../lib/httpError');
 
 const MAX_TOOL_ROUNDS = 3;
 const FALLBACK = 'Tuve un inconveniente técnico y no pude responderte. Una persona del equipo va a continuar la atención.';
 
-// ¿Dentro del horario del agente? schedule: {enabled, windows:[{days:[1..7 (1=lun)], start:'09:00', end:'18:00'}]}
-function isOpen(schedule, tz) {
-  if (!schedule || !schedule.enabled || !Array.isArray(schedule.windows) || !schedule.windows.length) return true;
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: tz || 'UTC', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date());
-  const get = (t) => parts.find((p) => p.type === t)?.value;
-  const day = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(get('weekday')) + 1;
-  const now = `${get('hour') === '24' ? '00' : get('hour')}:${get('minute')}`;
-  return schedule.windows.some((w) => (w.days || []).includes(day) && now >= w.start && now < w.end);
-}
+const { isOpen } = require('../lib/schedule');
 
 const hashVisitor = (v) => crypto.createHash('sha256').update(String(v)).digest('hex');
 
@@ -60,26 +54,29 @@ async function handleCustomerMessage(p) {
 
     let knowledge = [];
     let enabledTools = [];
+    let approvals = {};
     if (!humanMode) {
       if (agent.data_sources?.knowledge !== false) knowledge = await retriever.search(q, { query: p.message, agentId: agent.id, limit: 5 });
-      enabledTools = (await q('SELECT tool_name FROM agent_tools WHERE agent_id = $1 AND enabled AND NOT requires_approval', [agent.id])).map((r) => r.tool_name)
-        .filter((n) => tools.IMPLEMENTED.includes(n));
+      const trows = (await q('SELECT tool_name, requires_approval FROM agent_tools WHERE agent_id = $1 AND enabled', [agent.id])).filter((r) => tools.IMPLEMENTED.includes(r.tool_name));
+      enabledTools = trows.map((r) => r.tool_name);
+      approvals = Object.fromEntries(trows.map((r) => [r.tool_name, r.requires_approval]));
     }
-    return { agent, company, conv, history, knowledge, enabledTools, humanMode };
+    return { agent, company, conv, history, knowledge, enabledTools, approvals, humanMode };
   });
 
   const { agent, company, conv } = ctx;
-  if (ctx.humanMode) return finish(p.companyId, conv.id, null, 'needs_human', 'human');
+  const autoReplies = await events.emit(p.companyId, 'message.received', { text: p.message, conversationId: conv.id, agentId: agent.id, customerId: conv.customer_id || null });
+  if (ctx.humanMode) return finish(p.companyId, conv.id, null, 'needs_human', 'human', autoReplies);
 
   // 2) Fuera de horario
   if (!p.ignoreSchedule && !isOpen(agent.schedule, company.timezone)) {
     const text = agent.offline_message || 'Ahora estamos fuera de horario. Dejanos tu consulta y te respondemos apenas volvamos.';
-    return saveReply(p.companyId, conv.id, text, { offline: true }, 'waiting_customer', null);
+    return saveReply(p.companyId, conv.id, text, { offline: true }, 'waiting_customer', null, undefined, undefined, autoReplies);
   }
 
   // 3) Prompt + bucle de herramientas
   const built = promptBuilder.build({ agent, company, knowledge: ctx.knowledge, history: ctx.history, userMessage: p.message, toolNames: ctx.enabledTools });
-  const toolCtx = { companyId: p.companyId, agentId: agent.id, allowed: ctx.enabledTools, handoff: null };
+  const toolCtx = { companyId: p.companyId, agentId: agent.id, conversationId: conv.id, channel: p.channel, contact: p.contactId || '', allowed: ctx.enabledTools, approvals: ctx.approvals, handoff: null };
   let provider; let model;
   let totalIn = 0; let totalOut = 0; let text = ''; let failed = false;
   try {
@@ -105,15 +102,15 @@ async function handleCustomerMessage(p) {
 
   if (failed || !text.trim()) {
     return saveReply(p.companyId, conv.id, failed ? FALLBACK : (toolCtx.handoff ? 'Te derivo con una persona del equipo.' : FALLBACK),
-      { error: failed }, 'needs_human', failed ? 'Falla técnica del proveedor de IA' : toolCtx.handoff, agent.id, null);
+      { error: failed }, 'needs_human', failed ? 'Falla técnica del proveedor de IA' : toolCtx.handoff, agent.id, null, autoReplies);
   }
   const clean = text.replace(/##\s*SYSTEM[\s\S]*$/i, '').trim().slice(0, 4000) || FALLBACK; // no filtrar delimitadores internos
   const usage = { provider: provider.name, model, in: totalIn, out: totalOut };
   return saveReply(p.companyId, conv.id, clean, { provider: provider.name, sources: ctx.knowledge.map((k) => k.title) },
-    toolCtx.handoff ? 'needs_human' : 'waiting_customer', toolCtx.handoff, agent.id, usage);
+    toolCtx.handoff ? 'needs_human' : 'waiting_customer', toolCtx.handoff, agent.id, usage, autoReplies);
 }
 
-async function saveReply(companyId, convId, text, meta, status, handoffReason, agentId, usage) {
+async function saveReply(companyId, convId, text, meta, status, handoffReason, agentId, usage, autoReplies = []) {
   await db.tenant(companyId, async (q) => {
     await q("INSERT INTO messages (company_id, conversation_id, role, content, meta) VALUES ($1,$2,'ai',$3,$4)", [companyId, convId, text, JSON.stringify(meta || {})]);
     const handoff = status === 'needs_human';
@@ -121,17 +118,19 @@ async function saveReply(companyId, convId, text, meta, status, handoffReason, a
       [convId, status, handoff, 'human', handoffReason || '']);
     if (usage) await q('INSERT INTO usage (company_id, agent_id, conversation_id, provider, model, tokens_in, tokens_out) VALUES ($1,$2,$3,$4,$5,$6,$7)',
       [companyId, agentId, convId, usage.provider, usage.model, usage.in, usage.out]);
+    if (status === 'needs_human') await domain.notify(q, companyId, { title: 'Conversación requiere atención humana', body: handoffReason || '', level: 'alert', link: '/conversations' });
   });
-  return finish(companyId, convId, text, status);
+  if (status === 'needs_human') await events.emit(companyId, 'conversation.handoff', { conversationId: convId, reason: handoffReason || '', agentId });
+  return finish(companyId, convId, text, status, undefined, autoReplies);
 }
 
-async function finish(companyId, convId, reply, status, mode) {
+async function finish(companyId, convId, reply, status, mode, autoReplies = []) {
   const out = await db.tenant(companyId, async (q) => {
     const [c] = await q('SELECT status, mode FROM conversations WHERE id = $1', [convId]);
     const messages = await q('SELECT id, role, content, created_at FROM messages WHERE conversation_id = $1 ORDER BY created_at ASC LIMIT 200', [convId]);
     return { c, messages };
   });
-  return { conversationId: convId, reply, status: out.c.status, mode: mode || out.c.mode, messages: out.messages };
+  return { conversationId: convId, reply, status: out.c.status, mode: mode || out.c.mode, messages: out.messages, automationReplies: autoReplies };
 }
 
 module.exports = { handleCustomerMessage, isOpen, hashVisitor };

@@ -61,7 +61,8 @@ test('agentes: crear con preset, validar, editar', async () => {
   const r = await A.post('/api/agents', { name: 'Sofía — Ventas', type: 'sales', status: 'active' });
   assert.equal(r.status, 201);
   agentA = r.body.agent;
-  assert.deepEqual(agentA.tools.sort(), ['handoff_to_human', 'search_knowledge']);
+  assert.ok(['search_knowledge', 'handoff_to_human', 'query_products', 'create_quote'].every((t) => agentA.tools.includes(t)));
+  assert.deepEqual(agentA.approvals, ['create_quote']); // efecto con aprobación por defecto
   assert.match(agentA.rules[0], /Nunca inventar precios/);
   assert.equal((await A.post('/api/agents', { name: 'x', type: 'inventado' })).status, 400);
   const u = await A.put(`/api/agents/${agentA.id}`, { tone: 'cálido', autonomy: 'high' });
@@ -118,7 +119,7 @@ test('chat IA: responde con conocimiento, no inventa, deriva a humano', async ()
   convId = r1.body.conversationId;
   assert.match(r1.body.reply, /89\.900/);
   const r2 = await A.post(`/api/ai/agents/${agentA.id}/test`, { message: '¿Tienen pintura azul marino?', conversationId: convId });
-  assert.match(r2.body.reply, /No tengo esa información/);
+  assert.match(r2.body.reply, /No (tengo esa información|encontré ese producto)/);
   const r3 = await A.post(`/api/ai/agents/${agentA.id}/test`, { message: 'quiero hablar con una persona', conversationId: convId });
   assert.equal(r3.body.status, 'needs_human'); assert.equal(r3.body.mode, 'human');
   // con humano a cargo la IA no responde
@@ -204,8 +205,8 @@ test('demo público: agentes ficticios, chat sin login, límites', async () => {
 });
 
 test('API planificada responde 501; analytics del dashboard', async () => {
-  const p = await A.get('/api/products');
-  assert.equal(p.status, 501); assert.equal(p.body.error.details.phase, 2);
+  const p = await A.get('/api/whatsapp');
+  assert.equal(p.status, 501); assert.equal(p.body.error.details.phase, 3);
   const an = await A.get('/api/analytics/overview?range=month');
   assert.equal(an.status, 200);
   assert.ok(an.body.totals.conversations >= 1);

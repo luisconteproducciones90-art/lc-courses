@@ -55,6 +55,16 @@ function createApp() {
   api.use('/ai', require('./modules/ai'));
   api.use('/admin', require('./modules/admin'));
   api.use('/demo', require('./modules/demo'));
+  api.use('/products', require('./modules/products'));
+  const crm = require('./modules/customers');
+  api.use('/customers', crm.customers);
+  api.use('/leads', crm.leads);
+  api.use('/tickets', require('./modules/tickets'));
+  const ord = require('./modules/orders');
+  api.use('/orders', ord.orders);
+  api.use('/approvals', ord.approvals);
+  api.use('/automations', require('./modules/automations'));
+  api.use('/notifications', require('./modules/notifications'));
   for (const [p, r] of require('./modules/planned')) api.use(p, r);
   api.use(notFound);
   app.use('/api', api);

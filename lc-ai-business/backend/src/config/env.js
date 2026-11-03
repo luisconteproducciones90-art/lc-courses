@@ -24,6 +24,7 @@ module.exports = Object.freeze({
   databaseUrl: process.env.DATABASE_URL || 'postgres://lc_ai:lc_ai@localhost:5432/lc_ai_business',
   databaseSsl: bool(process.env.DATABASE_SSL),
   jwtSecret,
+  allowPrivateUrls: bool(process.env.ALLOW_PRIVATE_URLS) && !isProd, // solo desarrollo/tests
   cookieSecure: bool(process.env.COOKIE_SECURE, isProd),
   accessTtlSec: 15 * 60,
   refreshTtlSec: 7 * 24 * 3600,

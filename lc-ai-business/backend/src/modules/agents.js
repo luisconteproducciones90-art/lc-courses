@@ -15,14 +15,15 @@ router.use(authenticate);
 
 const TYPES = ['attention', 'sales', 'stock', 'admin', 'appointments', 'whatsapp', 'manager', 'custom'];
 const base = ['search_knowledge', 'handoff_to_human'];
+const cat = ['query_products', 'query_stock'];
 const PRESETS = {
-  attention: { label: 'Agente de Atención', icon: '🤖', description: 'Responde preguntas de clientes.', tone: 'amable y claro', personality: 'Paciente, empático y resolutivo.', objective: 'Resolver las consultas de los clientes con información verificada.', tools: base },
-  sales: { label: 'Agente de Ventas', icon: '💰', description: 'Ayuda a vender productos y servicios.', tone: 'cercano y persuasivo', personality: 'Amable, profesional y persuasiva.', objective: 'Convertir consultas en ventas sin presionar.', rules: ['Nunca inventar precios ni stock.'], tools: base },
-  stock: { label: 'Agente de Stock', icon: '📦', description: 'Consulta productos, disponibilidad y precios.', tone: 'preciso', personality: 'Exacto y directo.', objective: 'Informar disponibilidad y precios reales.', rules: ['Nunca inventar precios ni stock. Si no figura, decir que se confirma con el equipo.'], tools: base },
+  attention: { label: 'Agente de Atención', icon: '🤖', description: 'Responde preguntas de clientes.', tone: 'amable y claro', personality: 'Paciente, empático y resolutivo.', objective: 'Resolver las consultas de los clientes con información verificada.', tools: [...base, 'query_hours', 'query_customers', 'create_ticket'] },
+  sales: { label: 'Agente de Ventas', icon: '💰', description: 'Ayuda a vender productos y servicios.', tone: 'cercano y persuasivo', personality: 'Amable, profesional y persuasiva.', objective: 'Convertir consultas en ventas sin presionar.', rules: ['Nunca inventar precios ni stock.'], tools: [...base, ...cat, 'create_lead', 'create_quote'] },
+  stock: { label: 'Agente de Stock', icon: '📦', description: 'Consulta productos, disponibilidad y precios.', tone: 'preciso', personality: 'Exacto y directo.', objective: 'Informar disponibilidad y precios reales.', rules: ['Nunca inventar precios ni stock. Si no figura, decir que se confirma con el equipo.'], tools: [...base, ...cat] },
   admin: { label: 'Agente Administrativo', icon: '📋', description: 'Ayuda con información interna y documentación.', tone: 'formal', personality: 'Ordenado y riguroso.', objective: 'Responder dudas internas con la documentación de la empresa.', tools: base },
-  appointments: { label: 'Agente de Turnos', icon: '📅', description: 'Gestiona consultas y solicitudes de turnos.', tone: 'amable y ordenado', personality: 'Organizado y cordial.', objective: 'Tomar solicitudes de turno y derivarlas al equipo.', rules: ['No confirmar turnos: derivar a una persona para la confirmación.'], tools: base },
+  appointments: { label: 'Agente de Turnos', icon: '📅', description: 'Gestiona consultas y solicitudes de turnos.', tone: 'amable y ordenado', personality: 'Organizado y cordial.', objective: 'Tomar solicitudes de turno y derivarlas al equipo.', rules: ['No confirmar turnos: derivar a una persona para la confirmación.'], tools: [...base, 'query_hours', 'create_lead'] },
   whatsapp: { label: 'Agente WhatsApp', icon: '💬', description: 'Atiende conversaciones por WhatsApp (conexión en Fase 3).', tone: 'cercano y breve', personality: 'Ágil y cálido.', objective: 'Atender consultas con mensajes cortos.', tools: base },
-  manager: { label: 'Agente Gerencial', icon: '📊', description: 'Analiza información del negocio y genera informes.', tone: 'ejecutivo', personality: 'Analítico y sintético.', objective: 'Resumir y analizar la información cargada del negocio.', tools: ['search_knowledge'] },
+  manager: { label: 'Agente Gerencial', icon: '📊', description: 'Analiza información del negocio y genera informes.', tone: 'ejecutivo', personality: 'Analítico y sintético.', objective: 'Resumir y analizar la información cargada del negocio.', tools: ['search_knowledge', 'query_products'] },
   custom: { label: 'Agente Personalizado', icon: '🧠', description: 'Instrucciones específicas definidas por el administrador.', tone: 'profesional', personality: '', objective: '', tools: base },
 };
 
@@ -35,7 +36,7 @@ const agentSchema = z.object({
   offline_message: z.string().max(500).transform((v) => clean(v, 500)), rules,
   schedule: z.object({ enabled: z.boolean(), windows: windows.optional() }),
   data_sources: z.object({ knowledge: z.boolean() }), autonomy: z.enum(['low', 'medium', 'high']), status: z.enum(['draft', 'active', 'paused']),
-  tools: z.array(z.enum(tools.IMPLEMENTED)).max(20),
+  tools: z.array(z.enum(tools.IMPLEMENTED)).max(20), approvals: z.array(z.enum(tools.IMPLEMENTED)).max(20),
 });
 const COLS = ['name', 'description', 'type', 'avatar', 'personality', 'tone', 'language', 'objective', 'instructions', 'welcome_message', 'offline_message', 'rules', 'schedule', 'data_sources', 'autonomy', 'status'];
 const JSONCOLS = new Set(['rules', 'schedule', 'data_sources']);
@@ -43,18 +44,24 @@ const JSONCOLS = new Set(['rules', 'schedule', 'data_sources']);
 async function load(q, agentId) {
   const [a] = await q('SELECT * FROM agents WHERE id = $1', [agentId]);
   if (!a) throw E.notFound('Agente no encontrado');
-  a.tools = (await q('SELECT tool_name FROM agent_tools WHERE agent_id = $1 AND enabled', [agentId])).map((t) => t.tool_name);
+  const trows = await q('SELECT tool_name, requires_approval FROM agent_tools WHERE agent_id = $1 AND enabled', [agentId]);
+  a.tools = trows.map((t) => t.tool_name);
+  a.approvals = trows.filter((t) => t.requires_approval).map((t) => t.tool_name);
   return a;
 }
-async function saveTools(q, companyId, agentId, names) {
+async function saveTools(q, companyId, agentId, names, approvals) {
   await q('DELETE FROM agent_tools WHERE agent_id = $1', [agentId]);
-  for (const n of names) await q('INSERT INTO agent_tools (company_id, agent_id, tool_name) VALUES ($1,$2,$3)', [companyId, agentId, n]);
+  for (const n of names) {
+    // Herramientas con efecto: aprobación humana por defecto según el catálogo; el admin puede ajustarla.
+    const needs = tools.CATALOG[n].effect ? (approvals ? approvals.includes(n) : tools.defaultApproval(n)) : false;
+    await q('INSERT INTO agent_tools (company_id, agent_id, tool_name, requires_approval) VALUES ($1,$2,$3,$4)', [companyId, agentId, n, needs]);
+  }
 }
 
 router.get('/meta', requirePerm('agents:read'), (req, res) => {
   res.json({
     types: TYPES.map((t) => ({ type: t, ...PRESETS[t] })),
-    tools: [...tools.IMPLEMENTED.map((n) => ({ name: n, label: tools.CATALOG[n].label, available: true })), ...tools.PLANNED.map((t) => ({ ...t, available: false }))],
+    tools: [...tools.IMPLEMENTED.map((n) => ({ name: n, label: tools.CATALOG[n].label, available: true, effect: tools.CATALOG[n].effect, defaultApproval: !!tools.CATALOG[n].defaultApproval })), ...tools.PLANNED.map((t) => ({ ...t, available: false }))],
   });
 });
 
@@ -71,7 +78,7 @@ router.get('/:id', requirePerm('agents:read'), wrap(async (req, res) => {
 router.post('/', requirePerm('agents:write'), wrap(async (req, res) => {
   const type = req.body?.type;
   const preset = PRESETS[type] || {};
-  const b = parse(agentSchema.partial({ description: true, avatar: true, personality: true, tone: true, language: true, objective: true, instructions: true, welcome_message: true, offline_message: true, rules: true, schedule: true, data_sources: true, autonomy: true, status: true, tools: true }), req.body);
+  const b = parse(agentSchema.partial({ approvals: true, description: true, avatar: true, personality: true, tone: true, language: true, objective: true, instructions: true, welcome_message: true, offline_message: true, rules: true, schedule: true, data_sources: true, autonomy: true, status: true, tools: true }), req.body);
   const v = {
     description: preset.description || '', avatar: preset.icon || '', personality: preset.personality || '', tone: preset.tone || 'profesional', language: 'es',
     objective: preset.objective || '', instructions: '', welcome_message: '', offline_message: '', rules: preset.rules || [], schedule: { enabled: false },
@@ -81,7 +88,7 @@ router.post('/', requirePerm('agents:write'), wrap(async (req, res) => {
     await assertLimit(q, req.user.companyId, 'agents');
     const [a] = await q(`INSERT INTO agents (company_id, created_by, ${COLS.join(',')}) VALUES ($1,$2,${COLS.map((_, i) => `$${i + 3}`).join(',')}) RETURNING id`,
       [req.user.companyId, req.user.id, ...COLS.map((c) => (JSONCOLS.has(c) ? JSON.stringify(v[c]) : v[c]))]);
-    await saveTools(q, req.user.companyId, a.id, v.tools);
+    await saveTools(q, req.user.companyId, a.id, v.tools, b.approvals);
     return load(q, a.id);
   });
   await audit(req, 'agent.create', 'agent', agent.id, { type: agent.type });
@@ -95,7 +102,7 @@ router.put('/:id', requirePerm('agents:write'), wrap(async (req, res) => {
   const agent = await db.tenant(req.user.companyId, async (q) => {
     await load(q, aid);
     if (keys.length) await q(`UPDATE agents SET ${keys.map((k, i) => `${k} = $${i + 2}`).join(', ')} WHERE id = $1`, [aid, ...keys.map((k) => (JSONCOLS.has(k) ? JSON.stringify(b[k]) : b[k]))]);
-    if (b.tools) await saveTools(q, req.user.companyId, aid, b.tools);
+    if (b.tools || b.approvals) await saveTools(q, req.user.companyId, aid, b.tools || (await load(q, aid)).tools, b.approvals ?? (b.tools ? undefined : (await load(q, aid)).approvals));
     return load(q, aid);
   });
   await audit(req, 'agent.update', 'agent', aid, { fields: keys });
