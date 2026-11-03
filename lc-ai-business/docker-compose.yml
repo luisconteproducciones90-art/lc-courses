@@ -1,0 +1,20 @@
+# Para un VPS propio: PostgreSQL + la app. Copiá .env.example a .env y completalo.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: lc_ai
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?definí DB_PASSWORD en .env}
+      POSTGRES_DB: lc_ai_business
+    volumes: [pgdata:/var/lib/postgresql/data]
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on: [db]
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://lc_ai:${DB_PASSWORD}@db:5432/lc_ai_business
+    ports: ["127.0.0.1:4000:4000"]   # publicalo con Nginx/Caddy + HTTPS
+volumes:
+  pgdata:
