@@ -36,6 +36,7 @@ module.exports = Object.freeze({
   refreshTtlSec: 7 * 24 * 3600,
   superAdmin: { email: process.env.SUPERADMIN_EMAIL || '', password: process.env.SUPERADMIN_PASSWORD || '' },
   mp: { accessToken: process.env.MP_ACCESS_TOKEN || '', webhookSecret: process.env.MP_WEBHOOK_SECRET || '' },
+  redisUrl: process.env.REDIS_URL || '',
   embeddings: { provider: process.env.EMBEDDINGS_PROVIDER || '', openaiModel: process.env.OPENAI_EMBED_MODEL || 'text-embedding-3-small' },
   ai: {
     provider: process.env.AI_PROVIDER || 'mock',

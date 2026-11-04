@@ -49,7 +49,7 @@ Operaciones globales (login, panel SUPER ADMIN) usan `db.system(fn)`, visible y 
 
 ## 4. Base de datos
 
-Migraciones: `001_core` (núcleo), `002_crm_catalog`, `003_channels_api`, `004_billing_marketplace`, `005_semantic_search`, `006_custom_roles`. Todas las tablas con `company_id` tienen RLS; `plans` y `agent_templates` son globales.
+Migraciones: `001_core` (núcleo), `002_crm_catalog`, `003_channels_api`, `004_billing_marketplace`, `005_semantic_search`, `006_custom_roles`, `007_jobs`. Todas las tablas con `company_id` tienen RLS; `plans` y `agent_templates` son globales.
 
 Fase 1 crea (migración `001_core.sql`):
 
@@ -120,7 +120,10 @@ Reglas de plataforma (siempre presentes): no inventar información/precios/stock
 - **Búsqueda híbrida** (palabras + vectores, fusión RRF). Con `OPENAI_API_KEY` usa embeddings reales (`text-embedding-3-small`: sinónimos y paráfrasis); sin clave usa un hashing local que solo tolera tipeos, plurales y acentos. Usa `pgvector` si la base permite crear la extensión; si no, calcula la similitud en la aplicación (tope de 4000 fragmentos por consulta). La calidad semántica real y el camino OpenAI se probaron con un modelo simulado, no contra la API real. Sin índice HNSW todavía: para decenas de miles de fragmentos conviene agregarlo.
 - Extracción de PDF/DOCX/XLSX en el proceso de la API (sin OCR: PDFs escaneados e imágenes no se leen). Para escala conviene un worker aislado. Las URLs se descargan con protección SSRF.
 - Los archivos originales no se guardan, solo su texto fragmentado (almacenamiento de objetos llega con la Fase 4).
-- Rate limiting en memoria por proceso: con varias instancias hay que pasarlo a Redis. Los webhooks de WhatsApp se procesan en segundo plano en el mismo proceso (sin cola): si el servidor se reinicia a mitad, Meta reintenta.
+- **Cola de trabajos durable** (tabla `jobs`, `FOR UPDATE SKIP LOCKED`): los webhooks de WhatsApp y las entregas de webhooks salientes se encolan, se reintentan con espera creciente (hasta 5-6 veces; 4xx no se reintenta) y los trabajos huérfanos de un proceso caído se recuperan a los 5 minutos. Los fallidos definitivos se ven en SUPER ADMIN. Limitación: si un mensaje de WhatsApp falla *después* de guardarse, el reintento lo ve como duplicado y no responde.
+- **Rate limit**: con `REDIS_URL` el contador se comparte entre instancias (probado con dos servidores y Redis real); sin Redis es por proceso. Si Redis se cae, falla abierto y se registra. En ese caso el límite deja de proteger hasta que Redis vuelva.
+- **Gasto en dinero**: SUPER ADMIN carga los precios por modelo (USD por millón de tokens) y cada plan puede fijar un presupuesto mensual de IA. No hay precios por defecto: sin precios el costo es desconocido y los tokens de modelos sin precio se informan aparte. Es una estimación, no la factura del proveedor.
+- Sigue sin OCR: PDFs escaneados e imágenes no se leen (requiere un motor de OCR externo).
 - **WhatsApp y Mercado Pago no se probaron contra los servicios reales** (sin credenciales aquí): están probados con transportes simulados, firmas HMAC reales y los formatos documentados por Meta y Mercado Pago. Hay que hacer una prueba de punta a punta con credenciales de sandbox antes de vender.
 - **Ecosistema LC**: no se conocen las APIs reales de LC-SYSTEM BUSINESS, LC-ECOMMERCE, LC-PEDIDOS ni LC-PREVIEWS; se entrega un contrato (API v1, webhooks) y un conector REST con mapeo configurable, no integraciones específicas. Google, Instagram, Facebook y Email quedan catalogados, sin implementar.
 - Los precios de los planes están sin definir a propósito; hasta entonces el cambio de plan es por solicitud + pago manual.

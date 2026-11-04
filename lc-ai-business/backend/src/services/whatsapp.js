@@ -9,8 +9,6 @@ const domain = require('./domain');
 const GRAPH = 'https://graph.facebook.com/v20.0';
 let transport = async (url, opts) => safeFetch(url, opts); // inyectable en tests
 const setTransport = (fn) => { transport = fn; };
-const pending = new Set();
-const idle = () => Promise.all([...pending]);
 
 async function getIntegration(companyId) {
   const [row] = await db.tenant(companyId, (q) => q("SELECT * FROM integrations WHERE provider = 'whatsapp'"));
@@ -70,13 +68,13 @@ async function processChange(companyId, integ, value) {
   }
 }
 
-function handleWebhookAsync(companyId, integ, body) {
-  const p = (async () => {
-    for (const entry of body.entry || []) for (const ch of entry.changes || []) if (ch.field === 'messages' && ch.value) await processChange(companyId, integ, ch.value);
-  })().catch((e) => log.error('whatsapp webhook', { err: e.message })).finally(() => pending.delete(p));
-  pending.add(p);
-  return p;
+/** Procesa el cuerpo de un webhook (lo invoca la cola; si lanza, se reintenta). */
+async function processBody(companyId, body) {
+  const integ = await getIntegration(companyId);
+  if (!integ || integ.status !== 'active') return;
+  for (const entry of body.entry || []) for (const ch of entry.changes || []) if (ch.field === 'messages' && ch.value) await processChange(companyId, integ, ch.value);
 }
+const idle = () => require('./queue').idle();
 
 /** Respuesta manual de un operador a una conversación de WhatsApp (respeta la ventana de 24 h). */
 async function sendOperatorReply(companyId, conv, text) {
@@ -87,4 +85,4 @@ async function sendOperatorReply(companyId, conv, text) {
   try { const id = await sendText(integ, conv.external_contact, text); return { delivered: true, id }; } catch (e) { return { delivered: false, reason: 'WhatsApp rechazó el envío' }; }
 }
 
-module.exports = { getIntegration, sendText, sendTemplate, verifyCredentials, handleWebhookAsync, sendOperatorReply, setTransport, idle };
+module.exports = { getIntegration, sendText, sendTemplate, verifyCredentials, processBody, sendOperatorReply, setTransport, idle };

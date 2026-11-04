@@ -42,6 +42,11 @@ NODE_ENV=production DATABASE_URL=... JWT_SECRET=... PUBLIC_URL=https://ai.TU-DOM
 - **Mercado Pago (suscripciones de LC-AI)**: definí `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` y configurá en Mercado Pago la notificación `https://ai.TU-DOMINIO/api/webhooks/mercadopago` (tema *subscription_preapproval*). Mientras los planes no tengan precio (se fija en *SUPER ADMIN → Planes*), el cambio de plan se solicita a LC-SYSTEM y se registra el pago manual.
 - **Ecosistema LC**: ver `docs/API-ECOSISTEMA.md`.
 
+## Producción robusta
+- **Redis (opcional, recomendado con 2+ instancias)**: definí `REDIS_URL=redis://…` para compartir el rate limit. Sin Redis funciona igual, por proceso.
+- **Cola de trabajos**: no requiere nada extra (usa tu Postgres). Los webhooks de WhatsApp y las entregas a sistemas externos se reintentan solos; SUPER ADMIN → Proveedor de IA muestra el estado de la cola.
+- **Presupuesto de IA**: en SUPER ADMIN → Proveedor de IA cargá los precios por modelo; luego fijá el presupuesto mensual por plan en *Planes* (`ai_budget`, -1 = sin tope).
+
 ## Búsqueda semántica
 - Con `OPENAI_API_KEY` configurada, los documentos se indexan con embeddings reales de OpenAI (SUPER ADMIN → Proveedor de IA → Búsqueda semántica). Cada empresa usa **Conocimiento → Actualizar índice** una vez para indexar lo ya cargado.
 - `pgvector` es opcional: si tu Postgres permite `CREATE EXTENSION vector` (Render, Supabase y Neon lo permiten), la migración lo activa sola; si no, la app funciona igual calculando en Node.

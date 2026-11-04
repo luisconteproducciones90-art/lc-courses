@@ -12,6 +12,8 @@ const { csrfProtect } = require('./middleware/csrf');
 const { notFound, errorHandler } = require('./middleware/errors');
 const db = require('./db/pool');
 
+require('./services/jobs'); // registra los handlers de la cola
+
 function createApp() {
   const app = express();
   app.disable('x-powered-by');

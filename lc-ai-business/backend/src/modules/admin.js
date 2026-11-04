@@ -76,9 +76,10 @@ router.get('/plans', wrap(async (req, res) => {
   res.json({ plans: await db.system((q) => q('SELECT * FROM plans ORDER BY sort_order, created_at')) });
 }));
 const limit = z.number().int().min(-1).max(100000000); // -1 = ilimitado
+const budget = z.number().min(-1).max(100000000); // presupuesto mensual de IA en la moneda de precios (-1 = sin tope)
 const planBody = z.object({
   name: str(80, 2), description: str(300), price_cents: z.number().int().min(0).nullable(), currency: str(3, 3), is_active: z.boolean(), sort_order: z.number().int(),
-  limits: z.object({ users: limit, agents: limit, conversations: limit, documents: limit, storage_mb: limit, ai_tokens: limit }).partial(),
+  limits: z.object({ users: limit, agents: limit, conversations: limit, documents: limit, storage_mb: limit, ai_tokens: limit, ai_budget: budget }).partial(),
   features: z.record(z.string().max(40), z.boolean()),
 });
 router.put('/plans/:id', wrap(async (req, res) => {
@@ -168,6 +169,19 @@ router.put('/embeddings', wrap(async (req, res) => {
   await audit(req, 'admin.embeddings', 'settings', 'embeddings', b, null);
   res.json({ ok: true, note: 'Cada empresa debe reindexar su conocimiento (Conocimiento → Actualizar índice) para usar el nuevo modelo.' });
 }));
+
+// ----- Precios de IA (USD por millón de tokens, por modelo) para estimar el gasto -----
+router.get('/pricing', wrap(async (req, res) => { res.json({ pricing: await require('../lib/pricing').get() }); }));
+router.put('/pricing', wrap(async (req, res) => {
+  const b = parse(z.object({ currency: str(3, 3).default('USD'), models: z.record(str(80, 1), z.object({ in: z.number().min(0).max(100000), out: z.number().min(0).max(100000) })) }), req.body);
+  await db.system((q) => q(`INSERT INTO settings (company_id, key, value) VALUES (NULL, 'ai_pricing', $1)
+    ON CONFLICT (COALESCE(company_id, '00000000-0000-0000-0000-000000000000'::uuid), key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [JSON.stringify(b)]));
+  require('../lib/pricing').invalidate();
+  await audit(req, 'admin.pricing', 'settings', 'ai_pricing', { models: Object.keys(b.models) }, null);
+  res.json({ ok: true });
+}));
+
+router.get('/jobs', wrap(async (req, res) => { res.json(await require('../services/queue').stats()); }));
 
 router.get('/audit', wrap(async (req, res) => {
   const logs = await db.system((q) => q(`SELECT l.id, l.action, l.entity, l.entity_id, l.ip, l.created_at, l.company_id, c.name AS company_name, u.name AS user_name

@@ -38,8 +38,8 @@ router.post('/whatsapp/:key', wrap(async (req, res) => {
   if (!secret || !req.rawBody) throw E.forbidden('Firma no verificable');
   const expected = `sha256=${hmacHex(secret, req.rawBody)}`;
   if (!safeEqual(sig, expected)) throw E.forbidden('Firma inválida');
-  res.sendStatus(200); // respuesta inmediata; el procesamiento (IA) sigue en segundo plano
-  whatsapp.handleWebhookAsync(companyId, integ, req.body || {});
+  await require('../services/queue').enqueue('whatsapp.inbound', companyId, { body: req.body || {} }); // durable: se reintenta si falla
+  res.sendStatus(200);
 }));
 
 // Mercado Pago (suscripciones de LC-AI BUSINESS). Verifica firma y consulta la API; no confía en el cuerpo.

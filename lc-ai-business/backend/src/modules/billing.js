@@ -13,10 +13,11 @@ const router = express.Router();
 router.use(authenticate);
 
 router.get('/', requirePerm('billing:read'), wrap(async (req, res) => {
+  const prices = await require('../lib/pricing').get();
   const out = await db.tenant(req.user.companyId, async (q) => {
     const [company] = await q('SELECT c.status, p.id AS plan_id, p.code, p.name, p.limits, p.price_cents, p.currency FROM companies c LEFT JOIN plans p ON p.id = c.plan_id WHERE c.id = $1', [req.user.companyId]);
     return {
-      plan: company, usage: await limits.usageFor(q, req.user.companyId),
+      plan: company, usage: await limits.usageFor(q, req.user.companyId, prices),
       subscription: (await q("SELECT status, provider, current_period_end FROM subscriptions WHERE status <> 'canceled' ORDER BY created_at DESC LIMIT 1"))[0] || null,
       invoices: await q('SELECT id, amount, currency, status, provider, description, period_end, paid_at, created_at FROM invoices ORDER BY created_at DESC LIMIT 24'),
     };
