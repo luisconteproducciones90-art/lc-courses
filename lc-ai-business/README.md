@@ -2,7 +2,8 @@
 Plataforma SaaS multi-tenant de agentes de IA para empresas y PyMEs — **LC-SYSTEM · Soluciones que transforman**.
 
 - Arquitectura y plan: [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md)
-- Despliegue en subdominio: [`DEPLOY.md`](DEPLOY.md)
+- **Despliegue paso a paso: [`GUIA-DESPLIEGUE.md`](GUIA-DESPLIEGUE.md)** (referencia técnica: [`DEPLOY.md`](DEPLOY.md))
+- Verificación de un despliegue: `./scripts/smoke.sh https://tu-subdominio`
 - Integración con el ecosistema LC (API v1, webhooks, conectores): [`docs/API-ECOSISTEMA.md`](docs/API-ECOSISTEMA.md)
 
 ## Desarrollo local

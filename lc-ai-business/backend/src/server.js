@@ -7,6 +7,9 @@ const { createApp } = require('./app');
 
 (async () => {
   await migrate();
+  if (process.env.AUTO_SEED === 'true') { // primer arranque sin consola: planes, demo, plantillas y SUPER ADMIN (idempotente)
+    const { seedAll } = require('./db/seed'); await seedAll(); log.info('seed inicial aplicado');
+  }
   await db.checkRole();
   const queue = require('./services/jobs'); queue.start(); queue.kick(); // reanuda lo pendiente tras un reinicio
   const automations = require('./services/automations');

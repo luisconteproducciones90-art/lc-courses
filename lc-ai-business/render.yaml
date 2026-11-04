@@ -17,6 +17,7 @@ services:
       - { key: MP_WEBHOOK_SECRET, sync: false }
       - { key: SUPERADMIN_EMAIL, sync: false }
       - { key: SUPERADMIN_PASSWORD, sync: false }
+      - { key: AUTO_SEED, value: "true" }          # crea planes, demo, plantillas y SUPER ADMIN en el primer arranque (idempotente)
       - { key: AI_PROVIDER, value: mock }
       - { key: ANTHROPIC_API_KEY, sync: false }
       - { key: OPENAI_API_KEY, sync: false }

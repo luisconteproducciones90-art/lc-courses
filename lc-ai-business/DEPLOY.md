@@ -1,3 +1,5 @@
+> ¿Primera vez? Seguí **GUIA-DESPLIEGUE.md**, el paso a paso. Este documento es la referencia técnica.
+
 # Despliegue en un subdominio (ej. `ai.demoslcsystem.…`)
 
 LC-AI BUSINESS es **un solo servicio Node.js** que sirve la API y la interfaz desde el mismo origen, más una base **PostgreSQL**. No es un sitio estático: necesita un hosting que ejecute Node (no sirve el hosting compartido tipo cPanel solo-PHP/HTML).
@@ -8,7 +10,7 @@ LC-AI BUSINESS es **un solo servicio Node.js** que sirve la API y la interfaz de
 1. Subí esta carpeta (`lc-ai-business/`) a un repo de GitHub (ya está en `lc-courses/lc-ai-business`).
 2. En Render: **New → Blueprint** y apuntá a `lc-ai-business/render.yaml`. Crea el servicio y la base.
 3. Completá las variables marcadas: `PUBLIC_URL=https://ai.TU-DOMINIO`, `SUPERADMIN_EMAIL`, `SUPERADMIN_PASSWORD` (y la clave de IA si querés un modelo real). `JWT_SECRET` y `ENCRYPTION_KEY` se generan solas: **copiá `ENCRYPTION_KEY` a un lugar seguro**; si se pierde, los tokens de WhatsApp guardados dejan de ser legibles.
-4. Primera vez: en el servicio abrí **Shell** y ejecutá `node src/db/seed.js` (crea planes, empresa demo y SUPER ADMIN). Las migraciones corren solas al iniciar.
+4. El primer arranque crea solo los planes, la empresa demo, las plantillas y el SUPER ADMIN (`AUTO_SEED=true`, idempotente; no requiere Shell). Las migraciones corren solas al iniciar.
 5. **Dominio**: en Render → *Custom Domains* → agregá `ai.TU-DOMINIO`. En tu DNS creá:
    | Tipo | Nombre | Valor |
    |---|---|---|

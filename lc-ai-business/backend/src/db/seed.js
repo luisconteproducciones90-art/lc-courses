@@ -69,7 +69,7 @@ async function seedDemo() {
 }
 
 async function seedAll({ superAdminEmail, superAdminPassword } = {}) {
-  await migrate();
+  await migrate(); // idempotente: ya migrado = no hace nada
   await seedPlans();
   await seedDemo();
   await seedTemplates();
