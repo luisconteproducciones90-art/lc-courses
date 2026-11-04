@@ -15,18 +15,20 @@ function splitName(full) {
 /** Busca por whatsapp/teléfono/email; si no existe lo crea. Devuelve {customer, created}. */
 async function upsertCustomer(q, companyId, d) {
   const phone = clean(d.phone || '', 40); const wa = clean(d.whatsapp || '', 40); const email = clean(d.email || '', 200).toLowerCase();
-  let [c] = await q(
+  const ext = clean(d.externalRef || '', 120);
+  let [c] = ext ? await q('SELECT * FROM customers WHERE external_ref = $1 LIMIT 1', [ext]) : [];
+  if (!c) [c] = await q(
     `SELECT * FROM customers WHERE ($1 <> '' AND (whatsapp = $1 OR phone = $1)) OR ($2 <> '' AND (phone = $2 OR whatsapp = $2)) OR ($3 <> '' AND lower(email) = $3) LIMIT 1`, [wa, phone, email]);
   if (c) {
     const { first, last } = splitName(d.name || '');
-    [c] = await q(`UPDATE customers SET first_name = CASE WHEN first_name = '' THEN $2 ELSE first_name END, last_name = CASE WHEN last_name = '' THEN $3 ELSE last_name END,
+    [c] = await q(`UPDATE customers SET external_ref = CASE WHEN external_ref = '' THEN $7 ELSE external_ref END, first_name = CASE WHEN first_name = '' THEN $2 ELSE first_name END, last_name = CASE WHEN last_name = '' THEN $3 ELSE last_name END,
       email = CASE WHEN email = '' THEN $4 ELSE email END, phone = CASE WHEN phone = '' THEN $5 ELSE phone END, whatsapp = CASE WHEN whatsapp = '' THEN $6 ELSE whatsapp END WHERE id = $1 RETURNING *`,
-    [c.id, first, last, email, phone, wa]);
+    [c.id, first, last, email, phone, wa, ext]);
     return { customer: c, created: false };
   }
   const { first, last } = splitName(d.name || '');
-  [c] = await q(`INSERT INTO customers (company_id, first_name, last_name, phone, whatsapp, email, source) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
-    [companyId, first, last, phone, wa, email, d.source || 'ai']);
+  [c] = await q(`INSERT INTO customers (company_id, first_name, last_name, phone, whatsapp, email, source, external_ref) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
+    [companyId, first, last, phone, wa, email, d.source || 'ai', ext]);
   return { customer: c, created: true };
 }
 

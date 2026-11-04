@@ -8,6 +8,8 @@ const { clean } = require('../lib/text');
 const { E } = require('../lib/httpError');
 const { audit } = require('../lib/audit');
 const whatsapp = require('../services/whatsapp');
+const meta = require('../services/meta');
+const emailSvc = require('../services/email');
 
 const router = express.Router();
 router.use(authenticate);
@@ -59,6 +61,8 @@ router.post('/:id/messages', requirePerm('conversations:reply'), wrap(async (req
   const [conv] = await db.tenant(req.user.companyId, (q) => q('SELECT id, channel, external_contact FROM conversations WHERE id = $1', [cid]));
   let delivery = null;
   if (conv.channel === 'whatsapp') delivery = await whatsapp.sendOperatorReply(req.user.companyId, conv, content);
+  else if (meta.PROVIDERS[conv.channel]) delivery = await meta.sendOperatorReply(req.user.companyId, conv, content);
+  else if (conv.channel === 'email') delivery = await emailSvc.sendOperatorReply(req.user.companyId, conv, content);
   res.status(201).json({ message: msg, delivery });
 }));
 

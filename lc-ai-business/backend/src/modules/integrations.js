@@ -18,7 +18,7 @@ const router = express.Router();
 router.use(authenticate);
 const SCOPES = ['products:read', 'products:write', 'stock:read', 'customers:read', 'customers:write', 'orders:read', 'orders:write', 'conversations:read'];
 
-const PLANNED = [['google', 'Google (Calendar, Business Profile)'], ['instagram', 'Instagram (mensajes directos)'], ['facebook', 'Facebook Messenger'], ['email', 'Email (entrada y salida)'], ['mercadopago-merchant', 'Mercado Pago del comercio (cobros a clientes)']];
+const PLANNED = [['google', 'Google (Calendar, Business Profile)'], ['mercadopago-merchant', 'Mercado Pago del comercio (cobros a clientes)']];
 
 router.get('/', requirePerm('integrations:read'), wrap(async (req, res) => {
   const out = await db.tenant(req.user.companyId, async (q) => {
@@ -27,6 +27,7 @@ router.get('/', requirePerm('integrations:read'), wrap(async (req, res) => {
     return {
       widget: { ...c.widget, public_key: c.public_key, snippet: `<script src="${env.publicUrl}/lc-ai-widget.js" data-company="${c.public_key}" async></script>` },
       whatsapp: integs.find((i) => i.provider === 'whatsapp')?.status || 'disabled',
+      channels: Object.fromEntries(['instagram', 'facebook', 'email'].map((k) => [k, integs.find((i) => i.provider === k)?.status || 'disabled'])),
       connectors: integs.filter((i) => i.provider.startsWith('rest:')).map((i) => ({ id: i.id, name: i.name, status: i.status, preset: i.config.preset, base_url: i.config.base_url, last_sync_at: i.config.last_sync_at || null, last_error: i.config.last_error || '', last_result: i.config.last_result || null, auto_sync: i.config.auto_sync === 'true' || i.config.auto_sync === true })),
       api_keys: await q('SELECT id, name, prefix, scopes, last_used_at, revoked_at, created_at FROM api_keys ORDER BY created_at DESC'),
       webhooks: await q('SELECT id, url, events, enabled, created_at FROM webhook_endpoints ORDER BY created_at DESC'),

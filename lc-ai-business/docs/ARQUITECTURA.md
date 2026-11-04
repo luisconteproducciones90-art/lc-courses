@@ -49,7 +49,7 @@ Operaciones globales (login, panel SUPER ADMIN) usan `db.system(fn)`, visible y 
 
 ## 4. Base de datos
 
-Migraciones: `001_core` (núcleo), `002_crm_catalog`, `003_channels_api`, `004_billing_marketplace`, `005_semantic_search`, `006_custom_roles`, `007_jobs`. Todas las tablas con `company_id` tienen RLS; `plans` y `agent_templates` son globales.
+Migraciones: `001_core` (núcleo), `002_crm_catalog`, `003_channels_api`, `004_billing_marketplace`, `005_semantic_search`, `006_custom_roles`, `007_jobs`, `008_social_email`. Todas las tablas con `company_id` tienen RLS; `plans` y `agent_templates` son globales.
 
 Fase 1 crea (migración `001_core.sql`):
 
@@ -83,6 +83,8 @@ Roles base fijos (`company_admin`, `operator`, `viewer`) con matriz en `lib/perm
 | `/customers`, `/leads`, `/products`, `/tickets`, `/orders`, `/approvals`, `/automations`, `/notifications` | ✅ | Fase 2 |
 | `/widget/:key/*` | ✅ público | Chat embebible, CORS por empresa |
 | `/whatsapp`, `/webhooks/whatsapp/:key` | ✅ | Config + webhook con firma HMAC |
+| `/channels/:instagram\|facebook`, `/webhooks/instagram\|facebook/:key` | ✅ | Meta Graph API oficial, firma HMAC |
+| `/email`, `/webhooks/email/:key` | ✅ | SMTP de la empresa + correo entrante autenticado |
 | `/integrations` | ✅ | Widget, API keys, webhooks, conectores |
 | `/v1/*` | ✅ API key | Ecosistema LC; contrato en `/api/v1/openapi.json` |
 | `/billing`, `/marketplace`, `/webhooks/mercadopago` | ✅ | Fase 4 |
@@ -123,6 +125,7 @@ Reglas de plataforma (siempre presentes): no inventar información/precios/stock
 - **Cola de trabajos durable** (tabla `jobs`, `FOR UPDATE SKIP LOCKED`): los webhooks de WhatsApp y las entregas de webhooks salientes se encolan, se reintentan con espera creciente (hasta 5-6 veces; 4xx no se reintenta) y los trabajos huérfanos de un proceso caído se recuperan a los 5 minutos. Los fallidos definitivos se ven en SUPER ADMIN. Limitación: si un mensaje de WhatsApp falla *después* de guardarse, el reintento lo ve como duplicado y no responde.
 - **Rate limit**: con `REDIS_URL` el contador se comparte entre instancias (probado con dos servidores y Redis real); sin Redis es por proceso. Si Redis se cae, falla abierto y se registra. En ese caso el límite deja de proteger hasta que Redis vuelva.
 - **Gasto en dinero**: SUPER ADMIN carga los precios por modelo (USD por millón de tokens) y cada plan puede fijar un presupuesto mensual de IA. No hay precios por defecto: sin precios el costo es desconocido y los tokens de modelos sin precio se informan aparte. Es una estimación, no la factura del proveedor.
+- **Instagram, Messenger y Email** se probaron con firmas reales y transportes simulados (Email también con un servidor SMTP real local), no con cuentas de Meta ni buzones reales. Instagram/Messenger exigen la revisión de la app en Meta para producción. Email: la entrada requiere un proveedor de correo entrante (Postmark o un reenviador con el formato genérico); **no hay IMAP**. Solo responde texto plano, sin adjuntos.
 - Sigue sin OCR: PDFs escaneados e imágenes no se leen (requiere un motor de OCR externo).
 - **WhatsApp y Mercado Pago no se probaron contra los servicios reales** (sin credenciales aquí): están probados con transportes simulados, firmas HMAC reales y los formatos documentados por Meta y Mercado Pago. Hay que hacer una prueba de punta a punta con credenciales de sandbox antes de vender.
 - **Ecosistema LC**: no se conocen las APIs reales de LC-SYSTEM BUSINESS, LC-ECOMMERCE, LC-PEDIDOS ni LC-PREVIEWS; se entrega un contrato (API v1, webhooks) y un conector REST con mapeo configurable, no integraciones específicas. Google, Instagram, Facebook y Email quedan catalogados, sin implementar.

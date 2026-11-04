@@ -13,7 +13,7 @@ cd backend && npm install
 cp .env.example .env      # ajustar DATABASE_URL
 npm run seed              # planes, empresa demo, plantillas del marketplace y SUPER ADMIN
 npm run dev               # http://localhost:4000  (API + interfaz)
-npm test                  # 52 pruebas de integración (usa la BD lc_ai_test)
+npm test                  # 64 pruebas de integración (usa la BD lc_ai_test)
 ```
 
 ## Estado: Fases 1 a 5 implementadas
@@ -26,4 +26,5 @@ npm test                  # 52 pruebas de integración (usa la BD lc_ai_test)
 | 6 | Búsqueda semántica híbrida (palabras + embeddings, pgvector opcional), reindexado y consumo de embeddings contado en el plan |
 | 7 | Roles personalizados por empresa (permisos delegables, efecto inmediato) |
 | 8 | Endurecimiento: cola de trabajos durable con reintentos, rate limit compartido en Redis (opcional), presupuesto mensual de IA en dinero |
+| 9 | Canales Instagram, Facebook Messenger y Email (SMTP + correo entrante), con anti-bucles |
 | 5 | Contrato para LC-SYSTEM BUSINESS / LC-ECOMMERCE / LC-PEDIDOS / LC-PREVIEWS: API v1, webhooks y conector REST con mapeo de campos |

@@ -91,7 +91,7 @@ const CATALOG = {
     schema: z.object({ name: z.string().trim().max(120).optional(), phone: z.string().trim().max(40).optional(), email: z.string().trim().max(200).optional(), interest: z.string().trim().min(2).max(500) }),
     input_schema: { type: 'object', properties: { name: { type: 'string' }, phone: { type: 'string' }, email: { type: 'string' }, interest: { type: 'string', description: 'Qué necesita el cliente' } }, required: ['interest'] },
     async effect(q, ctx, i) {
-      const { customer, created } = await domain.upsertCustomer(q, ctx.companyId, { name: i.name, phone: i.phone, email: i.email, whatsapp: ctx.channel === 'whatsapp' ? ctx.contact : '', source: 'ai' });
+      const { customer, created } = await domain.upsertCustomer(q, ctx.companyId, { name: i.name, phone: i.phone, email: i.email || (ctx.channel === 'email' ? ctx.contact : ''), whatsapp: ctx.channel === 'whatsapp' ? ctx.contact : '', source: 'ai' });
       await domain.linkCustomer(q, ctx.conversationId, customer.id, ctx.agentId);
       const lead = await domain.createLead(q, ctx.companyId, { customerId: customer.id, conversationId: ctx.conversationId, agentId: ctx.agentId, interest: i.interest });
       return { result: { ok: true, lead_id: lead.id }, events: [...(created ? [['customer.created', { customerId: customer.id }]] : []), ['lead.created', { customerId: customer.id, leadId: lead.id, conversationId: ctx.conversationId, text: i.interest }]] };

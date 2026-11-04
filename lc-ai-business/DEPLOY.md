@@ -40,6 +40,8 @@ NODE_ENV=production DATABASE_URL=... JWT_SECRET=... PUBLIC_URL=https://ai.TU-DOM
 - **Widget web**: en *Integraciones* copiá el `<script>` y pegalo en el sitio del cliente. Funciona desde cualquier dominio (se puede restringir a una lista de sitios).
 - **WhatsApp (API oficial de Meta)**: en *Integraciones → WhatsApp* cargá Phone number ID, token y app secret; copiá la **URL del webhook** y el **token de verificación** en la app de Meta (Webhooks → campo `messages`). La URL debe ser pública con HTTPS, es decir, ya con el subdominio funcionando.
 - **Mercado Pago (suscripciones de LC-AI)**: definí `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` y configurá en Mercado Pago la notificación `https://ai.TU-DOMINIO/api/webhooks/mercadopago` (tema *subscription_preapproval*). Mientras los planes no tengan precio (se fija en *SUPER ADMIN → Planes*), el cambio de plan se solicita a LC-SYSTEM y se registra el pago manual.
+- **Instagram y Facebook Messenger**: en *Integraciones* cargá el ID de la cuenta/página, el token y el app secret; en tu app de Meta configurá el webhook con la URL y el token de verificación que muestra cada tarjeta (campo `messages`). Para producción Meta exige revisar la app y aprobar permisos.
+- **Email**: cargá tu servidor SMTP (para responder) y configurá en tu proveedor de correo entrante (por ejemplo Postmark → *Inbound webhook*) la URL de entrada con el secreto como contraseña (`https://lc:SECRETO@ai.TU-DOMINIO/api/webhooks/email/…`). No hay IMAP.
 - **Ecosistema LC**: ver `docs/API-ECOSISTEMA.md`.
 
 ## Producción robusta
