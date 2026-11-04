@@ -49,7 +49,7 @@ Operaciones globales (login, panel SUPER ADMIN) usan `db.system(fn)`, visible y 
 
 ## 4. Base de datos
 
-Migraciones: `001_core` (núcleo), `002_crm_catalog`, `003_channels_api`, `004_billing_marketplace`, `005_semantic_search`. Todas las tablas con `company_id` tienen RLS; `plans` y `agent_templates` son globales.
+Migraciones: `001_core` (núcleo), `002_crm_catalog`, `003_channels_api`, `004_billing_marketplace`, `005_semantic_search`, `006_custom_roles`. Todas las tablas con `company_id` tienen RLS; `plans` y `agent_templates` son globales.
 
 Fase 1 crea (migración `001_core.sql`):
 
@@ -62,9 +62,9 @@ Creadas en las fases siguientes:
 | 2 | `products`, `categories`, `leads`, `tickets`, `orders`, `pending_actions`, `automations`, `automation_logs`, `notifications` |
 | 3 | `integrations` (secretos cifrados AES-256-GCM), `api_keys` (solo hash), `whatsapp_templates`, `webhook_endpoints`, `webhook_events` |
 | 4 | `invoices`, `agent_templates` (globales), `agent_installs` |
-| Pendiente | `roles`/`permissions` personalizados por empresa |
+| Roles | `roles` (por empresa; permisos delegables, nunca `users:*`, `roles:*` ni `billing:write`) |
 
-Hoy los roles son una columna con `CHECK` y una matriz de permisos en `lib/permissions.js`; pasan a tablas cuando se necesiten roles personalizados por empresa.
+Roles base fijos (`company_admin`, `operator`, `viewer`) con matriz en `lib/permissions.js` + roles propios por empresa (tabla `roles`, `users.role_id`). Los permisos se leen en cada request: un cambio de rol rige de inmediato. Solo el administrador gestiona usuarios y roles; esos permisos no se pueden delegar, para evitar escaladas de privilegio.
 
 ## 5. API REST (`/api`)
 

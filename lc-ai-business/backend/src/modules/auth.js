@@ -45,8 +45,12 @@ async function profile(user) {
       `SELECT c.id, c.name, c.status, c.is_demo, c.public_key, p.code AS plan_code, p.name AS plan_name, p.limits AS plan_limits
          FROM companies c LEFT JOIN plans p ON p.id = c.plan_id WHERE c.id = $1`, [user.company_id])))[0]
     : null;
-  const perms = permsFor(user.role);
-  return { user: { id: user.id, name: user.name, email: user.email, role: user.role }, company, permissions: perms };
+  let perms = permsFor(user.role); let roleName = null;
+  if (user.role_id) {
+    const [r] = await db.system((q) => q('SELECT name, permissions FROM roles WHERE id = $1', [user.role_id]));
+    if (r) { perms = r.permissions; roleName = r.name; }
+  }
+  return { user: { id: user.id, name: user.name, email: user.email, role: user.role, role_name: roleName }, company, permissions: perms };
 }
 
 router.get('/csrf', (req, res) => { res.json({ csrfToken: issueCsrfCookie(res) }); });

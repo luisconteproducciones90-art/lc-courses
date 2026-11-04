@@ -47,6 +47,7 @@ function createApp() {
   api.use('/auth', require('./modules/auth'));
   api.use('/companies', require('./modules/companies'));
   api.use('/users', require('./modules/users'));
+  api.use('/roles', require('./modules/roles'));
   api.use('/agents', require('./modules/agents'));
   api.use('/conversations', require('./modules/conversations'));
   const { docs, knowledge } = require('./modules/documents');
