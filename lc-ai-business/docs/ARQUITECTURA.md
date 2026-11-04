@@ -49,7 +49,7 @@ Operaciones globales (login, panel SUPER ADMIN) usan `db.system(fn)`, visible y 
 
 ## 4. Base de datos
 
-Migraciones: `001_core` (núcleo), `002_crm_catalog`, `003_channels_api`, `004_billing_marketplace`. Todas las tablas con `company_id` tienen RLS; `plans` y `agent_templates` son globales.
+Migraciones: `001_core` (núcleo), `002_crm_catalog`, `003_channels_api`, `004_billing_marketplace`, `005_semantic_search`. Todas las tablas con `company_id` tienen RLS; `plans` y `agent_templates` son globales.
 
 Fase 1 crea (migración `001_core.sql`):
 
@@ -117,7 +117,7 @@ Reglas de plataforma (siempre presentes): no inventar información/precios/stock
 ## 7.1 Limitaciones conocidas de la Fase 1
 
 - El proveedor `mock` es simulado (no es un modelo de lenguaje). Los adaptadores Anthropic/OpenAI están implementados pero **no se probaron contra las APIs reales** (no hay claves en este entorno); la lógica de herramientas sí está probada con el mock.
-- La búsqueda es full-text (stemming en español), no semántica: no encuentra sinónimos. El esquema ya tiene `embedding` para migrar a `pgvector`.
+- **Búsqueda híbrida** (palabras + vectores, fusión RRF). Con `OPENAI_API_KEY` usa embeddings reales (`text-embedding-3-small`: sinónimos y paráfrasis); sin clave usa un hashing local que solo tolera tipeos, plurales y acentos. Usa `pgvector` si la base permite crear la extensión; si no, calcula la similitud en la aplicación (tope de 4000 fragmentos por consulta). La calidad semántica real y el camino OpenAI se probaron con un modelo simulado, no contra la API real. Sin índice HNSW todavía: para decenas de miles de fragmentos conviene agregarlo.
 - Extracción de PDF/DOCX/XLSX en el proceso de la API (sin OCR: PDFs escaneados e imágenes no se leen). Para escala conviene un worker aislado. Las URLs se descargan con protección SSRF.
 - Los archivos originales no se guardan, solo su texto fragmentado (almacenamiento de objetos llega con la Fase 4).
 - Rate limiting en memoria por proceso: con varias instancias hay que pasarlo a Redis. Los webhooks de WhatsApp se procesan en segundo plano en el mismo proceso (sin cola): si el servidor se reinicia a mitad, Meta reintenta.

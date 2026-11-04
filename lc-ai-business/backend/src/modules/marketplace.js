@@ -10,6 +10,8 @@ const { audit } = require('../lib/audit');
 const { chunkText } = require('../ai/chunker');
 const tools = require('../ai/tools');
 const limits = require('../services/limits');
+const embeddings = require('../ai/embeddings');
+const knowledgeIndex = require('../services/knowledgeIndex');
 
 const router = express.Router();
 router.use(authenticate);
@@ -27,6 +29,8 @@ router.post('/:slug/install', requirePerm('agents:write'), wrap(async (req, res)
   const [t] = await db.system((q) => q("SELECT * FROM agent_templates WHERE slug = $1 AND status = 'published'", [slug]));
   if (!t) throw E.notFound('Plantilla no disponible');
   const cfg = t.config; const a = cfg.agent || {};
+  const prepared = [];
+  for (const k of cfg.knowledge || []) { const chunks = chunkText(k.content); prepared.push({ k, chunks, emb: await embeddings.embedDocuments(chunks) }); } // fuera de la transacción
   const out = await db.tenant(req.user.companyId, async (q) => {
     await assertLimit(q, req.user.companyId, 'agents');
     const names = (cfg.tools || []).filter((n) => tools.CATALOG[n]);
@@ -35,13 +39,13 @@ router.post('/:slug/install', requirePerm('agents:write'), wrap(async (req, res)
     [req.user.companyId, req.user.id, a.name || t.name, a.description || t.description, a.type || 'custom', a.avatar || t.icon, a.personality || '', a.tone || 'profesional', a.objective || '', a.instructions || '', a.welcome_message || '', a.offline_message || '', JSON.stringify(a.rules || []), a.autonomy || 'medium']);
     for (const n of names) await q('INSERT INTO agent_tools (company_id, agent_id, tool_name, requires_approval) VALUES ($1,$2,$3,$4)', [req.user.companyId, ag.id, n, tools.CATALOG[n].effect ? (cfg.approvals ? cfg.approvals.includes(n) : tools.defaultApproval(n)) : false]);
     let docs = 0;
-    for (const k of cfg.knowledge || []) {
+    for (const { k, chunks, emb } of prepared) {
       await assertLimit(q, req.user.companyId, 'documents');
       await limits.checkStorage(q, req.user.companyId, Buffer.byteLength(k.content));
-      const chunks = chunkText(k.content);
       const [d] = await q("INSERT INTO documents (company_id, agent_id, title, source_type, mime, size_bytes, status, chunk_count, created_by) VALUES ($1,$2,$3,'text','text/plain',$4,'ready',$5,$6) RETURNING id",
         [req.user.companyId, ag.id, `${k.title} (plantilla)`, Buffer.byteLength(k.content), chunks.length, req.user.id]);
-      for (let i = 0; i < chunks.length; i += 1) await q('INSERT INTO knowledge_chunks (company_id, document_id, ordinal, content) VALUES ($1,$2,$3,$4)', [req.user.companyId, d.id, i, chunks[i]]);
+      await knowledgeIndex.insertChunks(q, req.user.companyId, d.id, chunks, emb);
+      await knowledgeIndex.recordUsage(q, req.user.companyId, emb);
       docs += 1;
     }
     await q('INSERT INTO agent_installs (company_id, template_id, agent_id) VALUES ($1,$2,$3)', [req.user.companyId, t.id, ag.id]);

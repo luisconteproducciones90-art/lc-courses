@@ -13,7 +13,7 @@ cd backend && npm install
 cp .env.example .env      # ajustar DATABASE_URL
 npm run seed              # planes, empresa demo, plantillas del marketplace y SUPER ADMIN
 npm run dev               # http://localhost:4000  (API + interfaz)
-npm test                  # 33 pruebas de integración (usa la BD lc_ai_test)
+npm test                  # 38 pruebas de integración (usa la BD lc_ai_test)
 ```
 
 ## Estado: Fases 1 a 5 implementadas
@@ -23,4 +23,5 @@ npm test                  # 33 pruebas de integración (usa la BD lc_ai_test)
 | 2 | CRM y leads, productos y stock (importación CSV), tickets, presupuestos y pedidos, aprobación humana de acciones de IA, automatizaciones (SI → ENTONCES), notificaciones, analytics completo con rango personalizado |
 | 3 | Widget web embebible, WhatsApp Business Cloud API (webhook firmado, plantillas, ventana de 24 h), API keys + API pública v1 (OpenAPI), webhooks salientes firmados, conectores REST |
 | 4 | Límites por plan (usuarios, agentes, documentos, almacenamiento, conversaciones y tokens mensuales), facturación (Mercado Pago + pago manual), marketplace con 9 plantillas de rubro |
+| 6 | Búsqueda semántica híbrida (palabras + embeddings, pgvector opcional), reindexado y consumo de embeddings contado en el plan |
 | 5 | Contrato para LC-SYSTEM BUSINESS / LC-ECOMMERCE / LC-PEDIDOS / LC-PREVIEWS: API v1, webhooks y conector REST con mapeo de campos |

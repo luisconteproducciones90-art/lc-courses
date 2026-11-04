@@ -59,7 +59,6 @@ async function handleCustomerMessage(p) {
     let enabledTools = [];
     let approvals = {};
     if (!humanMode) {
-      if (agent.data_sources?.knowledge !== false) knowledge = await retriever.search(q, { query: p.message, agentId: agent.id, limit: 5 });
       const trows = (await q('SELECT tool_name, requires_approval FROM agent_tools WHERE agent_id = $1 AND enabled', [agent.id])).filter((r) => tools.IMPLEMENTED.includes(r.tool_name));
       enabledTools = trows.map((r) => r.tool_name);
       approvals = Object.fromEntries(trows.map((r) => [r.tool_name, r.requires_approval]));
@@ -68,6 +67,7 @@ async function handleCustomerMessage(p) {
   });
 
   const { agent, company, conv } = ctx;
+  if (!ctx.humanMode && agent.data_sources?.knowledge !== false) ctx.knowledge = (await retriever.hybrid(p.companyId, { query: p.message, agentId: agent.id, limit: 5 })).results;
   const lim = ctx.humanMode ? { ok: true } : await limits.checkMessaging(p.companyId, { newConversation: ctx.newConversation });
   if (!lim.ok) {
     if (p.channel === 'test') throw E.limit(`${lim.reason} Actualizá el plan para seguir probando agentes.`);

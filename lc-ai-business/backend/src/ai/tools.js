@@ -32,7 +32,7 @@ const CATALOG = {
     schema: z.object({ query: z.string().trim().min(2).max(200) }),
     input_schema: { type: 'object', properties: { query: { type: 'string', description: 'Qué buscar, en pocas palabras' } }, required: ['query'] },
     async run(ctx, { query }) {
-      const rows = await db.tenant(ctx.companyId, (q) => retriever.search(q, { query, agentId: ctx.agentId, limit: 4 }));
+      const { results: rows } = await retriever.hybrid(ctx.companyId, { query, agentId: ctx.agentId, limit: 4 });
       if (!rows.length) return { found: false, message: 'Sin resultados en los documentos de la empresa.' };
       return { found: true, results: rows.map((r) => ({ source: r.title, text: r.content.slice(0, 900) })) };
     },

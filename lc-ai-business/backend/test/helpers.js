@@ -17,6 +17,9 @@ async function resetDb() {
 
 async function start() {
   await resetDb();
+  if (process.env.TEST_SUPERUSER_URL) { // opcional: habilita pgvector (requiere superusuario) para probar ese camino
+    const { Client: PgClient } = require('pg'); const c = new PgClient({ connectionString: process.env.TEST_SUPERUSER_URL }); await c.connect(); await c.query('CREATE EXTENSION IF NOT EXISTS vector'); await c.end();
+  }
   await seedAll({ superAdminEmail: 'root@lc.test', superAdminPassword: 'SuperSecreta123' });
   const server = http.createServer(createApp());
   await new Promise((r) => server.listen(0, r));

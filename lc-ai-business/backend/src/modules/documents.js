@@ -7,12 +7,14 @@ const { wrap } = require('../middleware/errors');
 const { authenticate, requirePerm } = require('../middleware/auth');
 const { parse, z, str, id } = require('../lib/validate');
 const { clean } = require('../lib/text');
-const { E } = require('../lib/httpError');
+const { E, HttpError } = require('../lib/httpError');
 const { assertLimit } = require('../lib/plans');
 const { audit } = require('../lib/audit');
 const { chunkText, chunkCsv } = require('../ai/chunker');
 const { extract, fromUrl, SUPPORTED } = require('../ai/extractors');
 const retriever = require('../ai/retriever');
+const embeddings = require('../ai/embeddings');
+const knowledgeIndex = require('../services/knowledgeIndex');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
 const docs = express.Router();
@@ -22,6 +24,7 @@ docs.use(authenticate); knowledge.use(authenticate);
 async function ingest(req, { title, sourceType, filename, mime, size, text, csv, parts, agentId }) {
   const chunks = parts ? parts.flatMap((p) => (p.csv ? chunkCsv(p.text).map((c) => `${p.label}\n${c}`) : chunkText(p.text))) : csv ? chunkCsv(text) : chunkText(text);
   if (!chunks.length) throw E.badRequest('El documento no tiene contenido utilizable');
+  const emb = await embeddings.embedDocuments(chunks); // fuera de la transacción: llama a la red
   return db.tenant(req.user.companyId, async (q) => {
     await assertLimit(q, req.user.companyId, 'documents');
     await require('../services/limits').checkStorage(q, req.user.companyId, size || 0);
@@ -30,9 +33,8 @@ async function ingest(req, { title, sourceType, filename, mime, size, text, csv,
       `INSERT INTO documents (company_id, agent_id, title, source_type, filename, mime, size_bytes, status, chunk_count, created_by)
        VALUES ($1,$2,$3,$4,$5,$6,$7,'ready',$8,$9) RETURNING *`,
       [req.user.companyId, agentId || null, title, sourceType, filename, mime, size, chunks.length, req.user.id]);
-    for (let i = 0; i < chunks.length; i += 1) {
-      await q('INSERT INTO knowledge_chunks (company_id, document_id, ordinal, content) VALUES ($1,$2,$3,$4)', [req.user.companyId, d.id, i, chunks[i]]);
-    }
+    await knowledgeIndex.insertChunks(q, req.user.companyId, d.id, chunks, emb);
+    await knowledgeIndex.recordUsage(q, req.user.companyId, emb);
     return d;
   });
 }
@@ -81,8 +83,18 @@ docs.delete('/:id', requirePerm('knowledge:write'), wrap(async (req, res) => {
 // Prueba de recuperación: "qué fragmentos encontraría el agente"
 knowledge.get('/search', requirePerm('knowledge:read'), wrap(async (req, res) => {
   const f = parse(z.object({ q: str(200, 2), agentId: id.optional() }), req.query);
-  const results = await db.tenant(req.user.companyId, (q) => retriever.search(q, { query: f.q, agentId: f.agentId || null, limit: 6 }));
-  res.json({ results: results.map((r) => ({ id: r.id, title: r.title, content: r.content, score: Number(r.rank) })) });
+  const r = await retriever.hybrid(req.user.companyId, { query: f.q, agentId: f.agentId || null, limit: 6 });
+  res.json({ mode: r.mode, model: r.model, results: r.results.map((x) => ({ id: x.id, title: x.title, content: x.content, score: x.score, via: x.via })) });
+}));
+
+knowledge.get('/status', requirePerm('knowledge:read'), wrap(async (req, res) => { res.json(await knowledgeIndex.status(req.user.companyId)); }));
+
+// Re-calcula el índice semántico (documentos viejos o cambio de modelo)
+knowledge.post('/reindex', requirePerm('knowledge:write'), rl.upload, wrap(async (req, res) => {
+  let out;
+  try { out = await knowledgeIndex.reindex(req.user.companyId); } catch (e) { throw new HttpError(502, 'embeddings_error', 'No se pudo calcular el índice semántico. Reintentá más tarde.'); }
+  await audit(req, 'knowledge.reindex', 'knowledge', '', { reindexed: out.reindexed });
+  res.json({ ...out, status: await knowledgeIndex.status(req.user.companyId) });
 }));
 
 module.exports = { docs, knowledge };

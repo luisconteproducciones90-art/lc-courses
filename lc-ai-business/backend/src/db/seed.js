@@ -7,6 +7,8 @@ const { migrate } = require('./migrate');
 const { chunkText, chunkCsv } = require('../ai/chunker');
 const demoData = require('./demoData');
 const templates = require('./templates');
+const embeddings = require('../ai/embeddings');
+const knowledgeIndex = require('../services/knowledgeIndex');
 
 // Sin precios definitivos: price_cents NULL, configurable desde SUPER ADMIN.
 const PLANS = [
@@ -44,17 +46,18 @@ async function seedSuperAdmin(email, password) {
 async function seedDemo() {
   const [ex] = await db.system((q) => q('SELECT id FROM companies WHERE is_demo'));
   if (ex) return ex.id;
+  const prepared = [];
+  for (const d of demoData.docs) { const chunks = d.csv ? chunkCsv(d.content) : chunkText(d.content); prepared.push({ d, chunks, emb: await embeddings.embedDocuments(chunks) }); }
   await db.system(async (q) => {
     const [plan] = await q("SELECT id FROM plans WHERE code = 'enterprise'");
     const [c] = await q(`INSERT INTO companies (name, legal_name, description, address, phone, whatsapp, email, website, business_hours, services, policies, faq, status, is_demo, plan_id)
       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'active',true,$13) RETURNING id`,
     [demoData.company.name, demoData.company.legal, demoData.company.description, demoData.company.address, demoData.company.phone, demoData.company.whatsapp, demoData.company.email,
       demoData.company.website, demoData.company.hours, demoData.company.services, demoData.company.policies, demoData.company.faq, plan.id]);
-    for (const d of demoData.docs) {
-      const chunks = d.csv ? chunkCsv(d.content) : chunkText(d.content);
+    for (const { d, chunks, emb } of prepared) {
       const [doc] = await q("INSERT INTO documents (company_id, title, source_type, mime, size_bytes, status, chunk_count) VALUES ($1,$2,'text','text/plain',$3,'ready',$4) RETURNING id",
         [c.id, d.title, Buffer.byteLength(d.content), chunks.length]);
-      for (let i = 0; i < chunks.length; i += 1) await q('INSERT INTO knowledge_chunks (company_id, document_id, ordinal, content) VALUES ($1,$2,$3,$4)', [c.id, doc.id, i, chunks[i]]);
+      await knowledgeIndex.insertChunks(q, c.id, doc.id, chunks, emb);
     }
     for (const a of demoData.agents) {
       const [ag] = await q(`INSERT INTO agents (company_id, name, description, type, avatar, personality, tone, objective, instructions, welcome_message, rules, autonomy, status)

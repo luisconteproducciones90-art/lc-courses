@@ -3,7 +3,7 @@ import { get, post, put, patch } from '../api.js';
 import { navigate } from '../main.js';
 
 export default async function page() {
-  const [{ stats }, { companies }, { plans }, ai, { logs }, { invoices }, { templates }] = await Promise.all([get('/api/admin/stats'), get('/api/admin/companies'), get('/api/admin/plans'), get('/api/admin/ai'), get('/api/admin/audit'), get('/api/admin/invoices'), get('/api/admin/templates')]);
+  const [{ stats }, { companies }, { plans }, ai, { logs }, { invoices }, { templates }, emb] = await Promise.all([get('/api/admin/stats'), get('/api/admin/companies'), get('/api/admin/plans'), get('/api/admin/ai'), get('/api/admin/audit'), get('/api/admin/invoices'), get('/api/admin/templates'), get('/api/admin/embeddings')]);
   let tab = 'companies';
   const body = h('div');
   const stat = (l, v) => h('div', { class: 'card stat' }, h('div', { class: 'lbl' }, l), h('div', { class: 'val' }, fmtNum(v)));
@@ -42,7 +42,10 @@ export default async function page() {
       return h('div', { class: 'card', style: { maxWidth: '640px' } }, h('h3', null, 'Proveedor de IA'), h('p', { class: 'mute small', style: { marginBottom: '12px' } }, 'Las claves API se configuran únicamente como variables de entorno del servidor y nunca se muestran ni viajan al navegador.'),
         field('Proveedor activo', sel), h('p', { class: 'small mute' }, ai.active ? `En uso: ${ai.active.provider} · ${ai.active.model}` : 'Sin proveedor operativo'),
         h('table', null, h('tbody', null, ai.providers.map((p) => h('tr', null, h('td', null, h('b', null, p.name)), h('td', null, h('span', { class: 'badge ' + (p.configured ? 'green' : '') }, p.configured ? 'clave presente' : 'sin clave')), h('td', { class: 'small dim' }, p.defaultModel))))),
-        h('button', { class: 'btn primary', style: { marginTop: '14px' }, onclick: async () => { try { await put('/api/admin/ai', { provider: sel.value }); toast('Proveedor actualizado'); navigate('/admin'); } catch (x) { toast(x.message, true); } } }, 'Guardar'));
+        h('button', { class: 'btn primary', style: { marginTop: '14px' }, onclick: async () => { try { await put('/api/admin/ai', { provider: sel.value }); toast('Proveedor actualizado'); navigate('/admin'); } catch (x) { toast(x.message, true); } } }, 'Guardar'),
+        h('hr', { style: { border: 0, borderTop: '1px solid var(--line)', margin: '22px 0' } }), h('h3', null, 'Búsqueda semántica (embeddings)'),
+        h('p', { class: 'mute small', style: { margin: '6px 0 12px' } }, `Activo: ${emb.active.provider} (${emb.active.model}). pgvector: ${emb.pgvector ? 'sí' : 'no, se calcula en la aplicación'}. Tras cambiar de modelo, cada empresa debe usar "Actualizar índice" en Conocimiento.`),
+        (() => { const es = h('select', null, emb.providers.map((p) => h('option', { value: p.name, selected: emb.active.provider === p.name }, `${p.name}${p.configured ? '' : ' (sin clave en el servidor)'} — ${p.note}`))); return h('div', null, field('Proveedor de embeddings', es), h('button', { class: 'btn', onclick: async () => { try { const r = await put('/api/admin/embeddings', { provider: es.value }); toast(r.note); navigate('/admin'); } catch (x) { toast(x.message, true); } } }, 'Guardar')); })());
     },
     invoices: () => h('div', { class: 'card pad0' }, h('div', { style: { padding: '14px 18px', display: 'flex' } }, h('h3', { style: { margin: 0 } }, 'Facturas y pagos'), h('button', { class: 'btn sm primary right', onclick: manualPay }, '+ Registrar pago manual')),
       h('div', { class: 'table-wrap' }, h('table', null, h('thead', null, h('tr', null, ['Fecha', 'Empresa', 'Plan', 'Importe', 'Medio', 'Estado'].map((t) => h('th', null, t)))), h('tbody', null, invoices.map((i) => h('tr', null, h('td', { class: 'small' }, fmtDate(i.created_at)), h('td', null, i.company_name), h('td', null, i.plan_name || '—'), h('td', null, `${i.currency} ${Number(i.amount).toLocaleString('es-AR')}`), h('td', null, i.provider), h('td', null, h('span', { class: 'badge ' + (i.status === 'paid' ? 'green' : 'amber') }, i.status)))))))),

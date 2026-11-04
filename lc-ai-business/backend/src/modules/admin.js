@@ -156,6 +156,19 @@ router.put('/templates/:id', wrap(async (req, res) => {
   res.json({ template: t });
 }));
 
+// ----- Embeddings (búsqueda semántica) -----
+router.get('/embeddings', wrap(async (req, res) => {
+  const r = await require('../ai/embeddings').resolve();
+  res.json({ active: { provider: r.name, model: r.model, semantic: r.semantic }, providers: [{ name: 'local', semantic: false, configured: true, note: 'Offline: tolera tipeos, plurales y acentos; no entiende sinónimos' }, { name: 'openai', semantic: true, configured: require('../config/env').ai.openai.key !== '', note: 'Semántica real (text-embedding-3-small)' }], pgvector: await require('../services/knowledgeIndex').hasPgvector() });
+}));
+router.put('/embeddings', wrap(async (req, res) => {
+  const b = parse(z.object({ provider: z.enum(['local', 'openai']) }), req.body);
+  await db.system((q) => q(`INSERT INTO settings (company_id, key, value) VALUES (NULL, 'embeddings', $1)
+    ON CONFLICT (COALESCE(company_id, '00000000-0000-0000-0000-000000000000'::uuid), key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`, [JSON.stringify(b)]));
+  await audit(req, 'admin.embeddings', 'settings', 'embeddings', b, null);
+  res.json({ ok: true, note: 'Cada empresa debe reindexar su conocimiento (Conocimiento → Actualizar índice) para usar el nuevo modelo.' });
+}));
+
 router.get('/audit', wrap(async (req, res) => {
   const logs = await db.system((q) => q(`SELECT l.id, l.action, l.entity, l.entity_id, l.ip, l.created_at, l.company_id, c.name AS company_name, u.name AS user_name
     FROM audit_logs l LEFT JOIN companies c ON c.id = l.company_id LEFT JOIN users u ON u.id = l.user_id ORDER BY l.created_at DESC LIMIT 100`));

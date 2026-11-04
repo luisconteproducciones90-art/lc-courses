@@ -42,6 +42,10 @@ NODE_ENV=production DATABASE_URL=... JWT_SECRET=... PUBLIC_URL=https://ai.TU-DOM
 - **Mercado Pago (suscripciones de LC-AI)**: definí `MP_ACCESS_TOKEN` y `MP_WEBHOOK_SECRET` y configurá en Mercado Pago la notificación `https://ai.TU-DOMINIO/api/webhooks/mercadopago` (tema *subscription_preapproval*). Mientras los planes no tengan precio (se fija en *SUPER ADMIN → Planes*), el cambio de plan se solicita a LC-SYSTEM y se registra el pago manual.
 - **Ecosistema LC**: ver `docs/API-ECOSISTEMA.md`.
 
+## Búsqueda semántica
+- Con `OPENAI_API_KEY` configurada, los documentos se indexan con embeddings reales de OpenAI (SUPER ADMIN → Proveedor de IA → Búsqueda semántica). Cada empresa usa **Conocimiento → Actualizar índice** una vez para indexar lo ya cargado.
+- `pgvector` es opcional: si tu Postgres permite `CREATE EXTENSION vector` (Render, Supabase y Neon lo permiten), la migración lo activa sola; si no, la app funciona igual calculando en Node.
+
 ## Base de datos (importante)
 - El usuario de la BD **no debe ser superusuario ni `BYPASSRLS`**: la separación entre empresas se apoya en Row-Level Security. En producción la app **se niega a iniciar** si detecta lo contrario.
 - Con Postgres administrado (Render, Supabase, Neon) el usuario de la app ya cumple. Con Postgres propio:
